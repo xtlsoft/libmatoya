@@ -1,0 +1,284 @@
+// Copyright (c) 2020 Christopher D. Dickson <cdd@matoya.group>
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+#include "matoya.h"
+
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <time.h>
+
+#include "mty-pthread.h"
+
+
+
+/*** THREAD ***/
+
+struct MTY_Thread {
+	pthread_t thread;
+	bool detach;
+	void *(*func)(void *opaque);
+	void *opaque;
+	void *ret;
+};
+
+static void *thread_func(void *opaque)
+{
+	MTY_Thread *ctx = (MTY_Thread *) opaque;
+
+	ctx->ret = ctx->func(ctx->opaque);
+
+	if (ctx->detach)
+		MTY_Free(ctx);
+
+	return NULL;
+}
+
+void MTY_ThreadCreate(void *(*func)(void *opaque), const void *opaque, MTY_Thread **thread)
+{
+	MTY_Thread *ctx = MTY_Alloc(1, sizeof(MTY_Thread));
+	ctx->func = func;
+	ctx->opaque = (void *) opaque;
+	ctx->detach = !thread;
+
+	if (thread)
+		*thread = ctx;
+
+	int32_t e = pthread_create(&ctx->thread, NULL, thread_func, ctx);
+
+	if (e != 0)
+		MTY_Fatal("'pthread_create' failed with error %d", e);
+
+	if (ctx->detach) {
+		e = pthread_detach(ctx->thread);
+		if (e != 0)
+			MTY_Fatal("'pthread_detach' failed with error %d", e);
+
+		ctx->thread = 0;
+	}
+}
+
+int64_t MTY_ThreadIDGet(MTY_Thread *ctx)
+{
+	return (int64_t) (ctx ? ctx->thread : pthread_self());
+}
+
+void *MTY_ThreadDestroy(MTY_Thread **thread)
+{
+	if (!thread || !*thread)
+		return NULL;
+
+	MTY_Thread *ctx = *thread;
+
+	if (ctx->thread) {
+		int32_t e = pthread_join(ctx->thread, NULL);
+		if (e != 0)
+			MTY_Fatal("'pthread_join' failed with error %d", e);
+	}
+
+	void *ret = ctx->ret;
+
+	MTY_Free(ctx);
+	*thread = NULL;
+
+	return ret;
+}
+
+
+
+/*** MUTEX ***/
+
+struct MTY_Mutex {
+	pthread_mutex_t mutex;
+};
+
+void MTY_MutexCreate(MTY_Mutex **mutex)
+{
+	MTY_Mutex *ctx = *mutex = MTY_Alloc(1, sizeof(MTY_Mutex));
+
+	int32_t e = pthread_mutex_init(&ctx->mutex, NULL);
+	if (e != 0)
+		MTY_Fatal("'pthread_mutex_init' failed with error %d", e);
+}
+
+void MTY_MutexLock(MTY_Mutex *ctx)
+{
+	int32_t e = pthread_mutex_lock(&ctx->mutex);
+	if (e != 0)
+		MTY_Fatal("'pthread_mutex_lock' failed with error %d", e);
+}
+
+bool MTY_MutexTryLock(MTY_Mutex *ctx)
+{
+	int32_t e = pthread_mutex_trylock(&ctx->mutex);
+
+	if (e == EBUSY) {
+		return false;
+
+	} else if (e != 0) {
+		MTY_Fatal("'pthread_mutex_trylock' failed with error %d", e);
+	}
+
+	return true;
+}
+
+void MTY_MutexUnlock(MTY_Mutex *ctx)
+{
+	int32_t e = pthread_mutex_unlock(&ctx->mutex);
+	if (e != 0)
+		MTY_Fatal("'pthread_mutex_unlock' failed with error %d", e);
+}
+
+void MTY_MutexDestroy(MTY_Mutex **mutex)
+{
+	if (!mutex || !*mutex)
+		return;
+
+	MTY_Mutex *ctx = *mutex;
+
+	int32_t e = pthread_mutex_destroy(&ctx->mutex);
+	if (e != 0)
+		MTY_Fatal("'pthread_mutex_destroy' failed with error %d", e);
+
+	MTY_Free(ctx);
+	*mutex = NULL;
+}
+
+
+
+/*** COND ***/
+
+struct MTY_Cond {
+	pthread_cond_t cond;
+};
+
+void MTY_CondCreate(MTY_Cond **cond)
+{
+	MTY_Cond *ctx = *cond = MTY_Alloc(1, sizeof(MTY_Cond));
+
+	int32_t e = pthread_cond_init(&ctx->cond, NULL);
+	if (e != 0)
+		MTY_Fatal("'pthread_cond_init' failed with error %d", e);
+}
+
+bool MTY_CondWait(MTY_Cond *ctx, MTY_Mutex *mutex, int32_t timeout)
+{
+	// Use pthread_cond_timedwait
+	if (timeout >= 0) {
+		struct timespec ts;
+		int32_t e = clock_gettime(CLOCK_REALTIME, &ts);
+		if (e != 0)
+			MTY_Fatal("'clock_gettime' failed with errno %d", errno);
+
+		ts.tv_sec += timeout / 1000;
+		ts.tv_nsec += (timeout % 1000) * 1000 * 1000;
+		ts.tv_sec += ts.tv_nsec / 1000000000;
+		ts.tv_nsec %= 1000000000;
+
+		e = pthread_cond_timedwait(&ctx->cond, &mutex->mutex, &ts);
+
+		if (e == ETIMEDOUT) {
+			return false;
+
+		} else if (e != 0) {
+			MTY_Fatal("'pthread_cond_timedwait' failed with error %d", e);
+		}
+
+	// Use pthread_cond_wait
+	} else {
+		int32_t e = pthread_cond_wait(&ctx->cond, &mutex->mutex);
+		if (e != 0)
+			MTY_Fatal("'pthread_cond_wait' failed with error %d", e);
+	}
+
+	return true;
+}
+
+void MTY_CondWake(MTY_Cond *ctx)
+{
+	int32_t e = pthread_cond_signal(&ctx->cond);
+	if (e != 0)
+		MTY_Fatal("'pthread_cond_signal' failed with error %d", e);
+}
+
+void MTY_CondWakeAll(MTY_Cond *ctx)
+{
+	int32_t e = pthread_cond_broadcast(&ctx->cond);
+	if (e != 0)
+		MTY_Fatal("'pthread_cond_broadcast' failed with error %d", e);
+}
+
+void MTY_CondDestroy(MTY_Cond **cond)
+{
+	if (!cond || !*cond)
+		return;
+
+	MTY_Cond *ctx = *cond;
+
+	int32_t e = pthread_cond_destroy(&ctx->cond);
+	if (e != 0)
+		MTY_Fatal("'pthread_cond_destroy' failed with error %d", e);
+
+	MTY_Free(ctx);
+	*cond = NULL;
+}
+
+
+
+/*** ATOMIC ***/
+
+// XXX Android will complain about the 64-bit atomics on 32-bit platforms,
+// there is probably a performance penalty but not critical enough to care
+
+void MTY_Atomic32Set(MTY_Atomic32 *atomic, int32_t value)
+{
+	__atomic_store(&atomic->value, &value, __ATOMIC_SEQ_CST);
+}
+
+void MTY_Atomic64Set(MTY_Atomic64 *atomic, int64_t value)
+{
+	__atomic_store(&atomic->value, &value, __ATOMIC_SEQ_CST);
+}
+
+int32_t MTY_Atomic32Get(MTY_Atomic32 *atomic)
+{
+	int32_t r;
+
+	__atomic_load(&atomic->value, &r, __ATOMIC_SEQ_CST);
+
+	return r;
+}
+
+int64_t MTY_Atomic64Get(MTY_Atomic64 *atomic)
+{
+	int64_t r;
+
+	__atomic_load(&atomic->value, &r, __ATOMIC_SEQ_CST);
+
+	return r;
+}
+
+int32_t MTY_Atomic32Add(MTY_Atomic32 *atomic, int32_t value)
+{
+	return __atomic_add_fetch(&atomic->value, value, __ATOMIC_SEQ_CST);
+}
+
+int64_t MTY_Atomic64Add(MTY_Atomic64 *atomic, int64_t value)
+{
+	return __atomic_add_fetch(&atomic->value, value, __ATOMIC_SEQ_CST);
+}
+
+bool MTY_Atomic32CAS(MTY_Atomic32 *atomic, int32_t oldValue, int32_t newValue)
+{
+	return __atomic_compare_exchange_n(&atomic->value, &oldValue, newValue, false,
+		__ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+}
+
+bool MTY_Atomic64CAS(MTY_Atomic64 *atomic, int64_t oldValue, int64_t newValue)
+{
+	return __atomic_compare_exchange_n(&atomic->value, &oldValue, newValue, false,
+		__ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+}

@@ -1,0 +1,13 @@
+*.o
+*.so
+*.obj
+*.dll
+*.pdb
+
+/obj
+/bin
+/src/shaders/GL/*.h
+/src/windows/shaders/*.h
+/src/unix/apple/shaders/*.h
+
+.DS_Store

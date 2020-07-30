@@ -1,0 +1,347 @@
+// Copyright (c) 2020 Christopher D. Dickson <cdd@matoya.group>
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+#include "matoya.h"
+
+#include <string.h>
+
+#include "mty-rwlock.h"
+#include "mty-tls.h"
+
+struct MTY_Sync {
+	bool signal;
+	MTY_Mutex *mutex;
+	MTY_Cond *cond;
+};
+
+void MTY_SyncCreate(MTY_Sync **sync)
+{
+	MTY_Sync *ctx = *sync = MTY_Alloc(1, sizeof(struct MTY_Sync));
+
+	MTY_MutexCreate(&ctx->mutex);
+	MTY_CondCreate(&ctx->cond);
+}
+
+bool MTY_SyncWait(MTY_Sync *ctx, int32_t timeout)
+{
+	MTY_MutexLock(ctx->mutex);
+
+	if (!ctx->signal)
+		MTY_CondWait(ctx->cond, ctx->mutex, timeout);
+
+	bool signal = ctx->signal;
+	ctx->signal = false;
+
+	MTY_MutexUnlock(ctx->mutex);
+
+	return signal;
+}
+
+void MTY_SyncWake(MTY_Sync *ctx)
+{
+	MTY_MutexLock(ctx->mutex);
+
+	if (!ctx->signal) {
+		ctx->signal = true;
+		MTY_CondWake(ctx->cond);
+	}
+
+	MTY_MutexUnlock(ctx->mutex);
+}
+
+void MTY_SyncDestroy(MTY_Sync **sync)
+{
+	if (!sync || !*sync)
+		return;
+
+	MTY_Sync *ctx = *sync;
+
+	MTY_CondDestroy(&ctx->cond);
+	MTY_MutexDestroy(&ctx->mutex);
+
+	MTY_Free(ctx);
+	*sync = NULL;
+}
+
+
+
+/*** THREAD POOL ***/
+
+struct thread_info {
+	MTY_ThreadState status;
+	void (*func)(void *opaque);
+	void (*detach)(void *opaque);
+	void *opaque;
+	MTY_Thread *t;
+	MTY_Mutex *m;
+};
+
+struct MTY_ThreadPool {
+	uint32_t num;
+	struct thread_info *ti;
+};
+
+void MTY_ThreadPoolCreate(uint32_t maxThreads, MTY_ThreadPool **pool)
+{
+	MTY_ThreadPool *ctx = *pool = MTY_Alloc(1, sizeof(MTY_ThreadPool));
+
+	ctx->num = maxThreads + 1;
+	ctx->ti = MTY_Alloc(ctx->num, sizeof(struct thread_info));
+
+	for (uint32_t x = 0; x < ctx->num; x++)
+		MTY_MutexCreate(&ctx->ti[x].m);
+}
+
+static void *thread_pool_func(void *opaque)
+{
+	struct thread_info *ti = (struct thread_info *) opaque;
+
+	ti->func(ti->opaque);
+
+	MTY_MutexLock(ti->m);
+
+	if (ti->detach) {
+		ti->detach(ti->opaque);
+		ti->status = MTY_THREAD_STATE_DETACHED;
+
+	} else {
+		ti->status = MTY_THREAD_STATE_DONE;
+	}
+
+	MTY_MutexUnlock(ti->m);
+
+	return NULL;
+}
+
+uint32_t MTY_ThreadPoolStart(MTY_ThreadPool *ctx, void (*func)(void *opaque), const void *opaque)
+{
+	uint32_t index = 0;
+
+	for (uint32_t x = 1; x < ctx->num && index == 0; x++) {
+		struct thread_info *ti = &ctx->ti[x];
+
+		MTY_MutexLock(ti->m);
+
+		if (ti->status == MTY_THREAD_STATE_DETACHED) {
+			MTY_ThreadDestroy(&ti->t);
+			ti->status = MTY_THREAD_STATE_EMPTY;
+		}
+
+		if (ti->status == MTY_THREAD_STATE_EMPTY) {
+			ti->func = func;
+			ti->opaque = (void *) opaque;
+			ti->detach = NULL;
+			ti->status = MTY_THREAD_STATE_RUNNING;
+			MTY_ThreadCreate(thread_pool_func, ti, &ti->t);
+			index = x;
+		}
+
+		MTY_MutexUnlock(ti->m);
+	}
+
+	return index;
+}
+
+void MTY_ThreadPoolDetach(MTY_ThreadPool *ctx, uint32_t index, void (*detach)(void *opaque))
+{
+	struct thread_info *ti = &ctx->ti[index];
+
+	MTY_MutexLock(ti->m);
+
+	if (ti->status == MTY_THREAD_STATE_RUNNING) {
+		ti->detach = detach;
+
+	} else if (ti->status == MTY_THREAD_STATE_DONE) {
+		if (detach)
+			detach(ti->opaque);
+
+		ti->status = MTY_THREAD_STATE_DETACHED;
+	}
+
+	MTY_MutexUnlock(ti->m);
+}
+
+MTY_ThreadState MTY_ThreadPoolState(MTY_ThreadPool *ctx, uint32_t index, void **opaque)
+{
+	struct thread_info *ti = &ctx->ti[index];
+
+	MTY_MutexLock(ti->m);
+
+	MTY_ThreadState status = ti->status;
+	*opaque = ti->opaque;
+
+	MTY_MutexUnlock(ti->m);
+
+	return status;
+}
+
+void MTY_ThreadPoolDestroy(MTY_ThreadPool **pool, void (*detach)(void *opaque))
+{
+	if (!pool || !*pool)
+		return;
+
+	MTY_ThreadPool *ctx = *pool;
+
+	for (uint32_t x = 0; x < ctx->num; x++) {
+		MTY_ThreadPoolDetach(ctx, x, detach);
+
+		if (ctx->ti[x].status != MTY_THREAD_STATE_EMPTY)
+			MTY_ThreadDestroy(&ctx->ti[x].t);
+
+		MTY_MutexDestroy(&ctx->ti[x].m);
+	}
+
+	MTY_Free(ctx->ti);
+	MTY_Free(ctx);
+	*pool = NULL;
+}
+
+
+
+/*** RWLOCK ***/
+
+#define RWLOCK_MAX UINT8_MAX
+
+struct MTY_RWLock {
+	mty_rwlock rwlock;
+	MTY_Atomic32 yield;
+	uint8_t index;
+};
+
+static MTY_TLS struct rwlock_state {
+	uint16_t taken;
+	bool init;
+	bool read;
+	bool write;
+} RWLOCK_STATE[RWLOCK_MAX];
+
+static uint8_t rwlock_index(void)
+{
+	for (uint8_t x = 0; x < RWLOCK_MAX; x++) {
+		struct rwlock_state *rw = &RWLOCK_STATE[x];
+
+		if (!rw->init) {
+			rw->init = true;
+			return x;
+		}
+	}
+
+	MTY_Fatal("'rwlock_index' could not find a free rwlock slot, maximum is %u per thread", RWLOCK_MAX);
+
+	return 0;
+}
+
+void MTY_RWLockCreate(MTY_RWLock **rwlock)
+{
+	MTY_RWLock *ctx = *rwlock = MTY_Alloc(1, sizeof(MTY_RWLock));
+	ctx->index = rwlock_index();
+
+	mty_rwlock_create(&ctx->rwlock);
+}
+
+void MTY_RWLockReader(MTY_RWLock *ctx)
+{
+	struct rwlock_state *rw = &RWLOCK_STATE[ctx->index];
+
+	if (rw->taken == 0) {
+		// Ensure that readers will yield to writers in a tight loop
+		while (MTY_Atomic32Get(&ctx->yield) > 0)
+			MTY_Sleep(0);
+
+		mty_rwlock_reader(&ctx->rwlock);
+		rw->read = true;
+	}
+
+	rw->taken++;
+}
+
+void MTY_RWLockWriter(MTY_RWLock *ctx)
+{
+	bool relock = false;
+	struct rwlock_state *rw = &RWLOCK_STATE[ctx->index];
+
+	if (rw->read) {
+		mty_rwlock_unlock_reader(&ctx->rwlock);
+		rw->read = false;
+		relock = true;
+	}
+
+	if (rw->taken == 0 || relock) {
+		MTY_Atomic32Add(&ctx->yield, 1);
+		mty_rwlock_writer(&ctx->rwlock);
+		MTY_Atomic32Add(&ctx->yield, -1);
+		rw->write = true;
+	}
+
+	rw->taken++;
+}
+
+void MTY_RWLockUnlock(MTY_RWLock *ctx)
+{
+	struct rwlock_state *rw = &RWLOCK_STATE[ctx->index];
+
+	if (--rw->taken == 0) {
+		if (rw->read) {
+			mty_rwlock_unlock_reader(&ctx->rwlock);
+			rw->read = false;
+
+		} else if (rw->write) {
+			mty_rwlock_unlock_writer(&ctx->rwlock);
+			rw->write = false;
+		}
+	}
+}
+
+void MTY_RWLockDestroy(MTY_RWLock **rwlock)
+{
+	if (!rwlock || !*rwlock)
+		return;
+
+	MTY_RWLock *ctx = *rwlock;
+
+	mty_rwlock_destroy(&ctx->rwlock);
+	memset(&RWLOCK_STATE[ctx->index], 0, sizeof(struct rwlock_state));
+
+	MTY_Free(ctx);
+	*rwlock = NULL;
+}
+
+
+
+/*** GLOBAL LOCKS ***/
+
+static MTY_Atomic32 THREAD_GINDEX = {1};
+static mty_rwlock THREAD_GLOCKS[UINT8_MAX];
+
+void MTY_GlobalLock(MTY_Atomic32 *lock)
+{
+	entry: {
+		uint32_t index = MTY_Atomic32Get(lock);
+
+		// 0 means uninitialized, 1 means currently initializing
+		if (index < 2) {
+			if (MTY_Atomic32CAS(lock, 0, 1)) {
+				index = MTY_Atomic32Add(&THREAD_GINDEX, 1);
+				if (index >= UINT8_MAX)
+					MTY_Fatal("Global lock index of %u exceeded", UINT8_MAX);
+
+				mty_rwlock_create(&THREAD_GLOCKS[index]);
+				MTY_Atomic32Set(lock, index);
+
+			} else {
+				MTY_Sleep(0);
+				goto entry;
+			}
+		}
+
+		mty_rwlock_writer(&THREAD_GLOCKS[index]);
+	}
+}
+
+void MTY_GlobalUnlock(MTY_Atomic32 *lock)
+{
+	mty_rwlock_unlock_writer(&THREAD_GLOCKS[MTY_Atomic32Get(lock)]);
+}
