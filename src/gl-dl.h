@@ -9,8 +9,7 @@
 #include "GL/glcorearb30.h"
 
 
-
-/*** INTERFACE ***/
+// Interface
 
 #if defined MTY_GL_EXTERNAL
 
@@ -31,7 +30,6 @@ static PFNGLGETINTEGERVPROC             glGetIntegerv;
 static PFNGLGETFLOATVPROC               glGetFloatv;
 static PFNGLBINDTEXTUREPROC             glBindTexture;
 static PFNGLDELETETEXTURESPROC          glDeleteTextures;
-static PFNGLGETTEXLEVELPARAMETERIVPROC  glGetTexLevelParameteriv;
 static PFNGLTEXPARAMETERIPROC           glTexParameteri;
 static PFNGLGENTEXTURESPROC             glGenTextures;
 static PFNGLTEXIMAGE2DPROC              glTexImage2D;
@@ -73,8 +71,7 @@ static PFNGLBLENDFUNCSEPARATEPROC       glBlendFuncSeparate;
 static PFNGLGETPROGRAMIVPROC            glGetProgramiv;
 
 
-
-/*** RUNTIME OPEN ***/
+// Runtime open
 
 static MTY_Atomic32 GL_DL_LOCK;
 static bool GL_DL_INIT;
@@ -103,7 +100,6 @@ static bool gl_dl_global_init(void)
 		LOAD_SYM(glGetFloatv);
 		LOAD_SYM(glBindTexture);
 		LOAD_SYM(glDeleteTextures);
-		LOAD_SYM(glGetTexLevelParameteriv);
 		LOAD_SYM(glTexParameteri);
 		LOAD_SYM(glGenTextures);
 		LOAD_SYM(glTexImage2D);

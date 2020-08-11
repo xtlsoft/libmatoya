@@ -288,7 +288,7 @@ MTY_Texture *MTY_WindowGetBackBuffer(MTY_Window *ctx)
 		XWindowAttributes attr = {0};
 		XGetWindowAttributes(ctx->display, ctx->xwindow, &attr);
 
-		gfx_gl_rtv_refresh(&ctx->rtv, GL_RGBA, attr.width, attr.height);
+		gfx_gl_rtv_refresh(&ctx->rtv, GL_RGBA8, GL_RGBA, attr.width, attr.height);
 		ctx->back_buffer = ctx->rtv.texture;
 	}
 

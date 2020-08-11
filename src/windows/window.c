@@ -17,7 +17,6 @@
 #include <dxgi1_3.h>
 
 #include "mty-tls.h"
-#include "wchar.h"
 
 #define WINDOW_CLASS_NAME L"LIBWindowClass"
 #define WINDOW_SWAP_CHAIN_FLAGS DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT
@@ -39,10 +38,6 @@ struct MTY_Window {
 
 	MTY_Renderer *renderer;
 };
-
-
-
-/*** WINDOW ***/
 
 static HRESULT (WINAPI *_GetDpiForMonitor)(HMONITOR hmonitor, MONITOR_DPI_TYPE dpiType, UINT *dpiX, UINT *dpiY);
 
@@ -109,7 +104,7 @@ static LRESULT CALLBACK window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
 			wmsg.mouseWheel.y = GET_WHEEL_DELTA_WPARAM(wparam);
 			break;
 		case WM_DROPFILES:
-			WCHAR namew[MTY_PATH_MAX];
+			wchar_t namew[MTY_PATH_MAX];
 
 			if (DragQueryFile((HDROP) wparam, 0, namew, MTY_PATH_MAX)) {
 				SetForegroundWindow(hwnd);
@@ -175,7 +170,7 @@ bool MTY_WindowCreate(const char *title, MTY_WindowMsgFunc msg_func, const void 
 	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
 	wc.lpszClassName = WINDOW_CLASS_NAME;
 
-	WCHAR path[MTY_PATH_MAX];
+	wchar_t path[MTY_PATH_MAX];
 	GetModuleFileName(ctx->instance, path, MTY_PATH_MAX);
 	ExtractIconEx(path, 0, &wc.hIcon, &wc.hIconSm, 1);
 
@@ -206,7 +201,7 @@ bool MTY_WindowCreate(const char *title, MTY_WindowMsgFunc msg_func, const void 
 		}
 	}
 
-	WCHAR titlew[MTY_TITLE_MAX];
+	wchar_t titlew[MTY_TITLE_MAX];
 	MTY_MultiToWide(title, titlew, MTY_TITLE_MAX);
 
 	ctx->hwnd = CreateWindowEx(0, WINDOW_CLASS_NAME, titlew, WS_VISIBLE | style,
@@ -290,13 +285,13 @@ void MTY_AppRun(MTY_AppFunc func, const void *opaque)
 
 void MTY_WindowSetTitle(MTY_Window *ctx, const char *title, const char *subtitle)
 {
-	WCHAR titlew[MTY_TITLE_MAX];
+	wchar_t titlew[MTY_TITLE_MAX];
 	MTY_MultiToWide(title, titlew, MTY_TITLE_MAX);
 
-	WCHAR full[MTY_TITLE_MAX];
+	wchar_t full[MTY_TITLE_MAX];
 
 	if (subtitle) {
-		WCHAR subtitlew[MTY_TITLE_MAX];
+		wchar_t subtitlew[MTY_TITLE_MAX];
 		MTY_MultiToWide(subtitle, subtitlew, MTY_TITLE_MAX);
 
 		_snwprintf_s(full, MTY_TITLE_MAX, _TRUNCATE, L"%s - %s", titlew, subtitlew);

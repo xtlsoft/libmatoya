@@ -6,4 +6,6 @@
 
 #pragma once
 
-#include <linux/limits.h>
+#include <string.h>
+
+#define mty_proc_name(name, size) (memset(name, 0, size), false)

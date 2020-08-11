@@ -7,8 +7,7 @@
 #pragma once
 
 
-
-/*** INTERFACE ***/
+// Interface
 
 #define CURLINFO_LONG             0x200000
 
@@ -69,8 +68,7 @@ static struct curl_slist *(*curl_slist_append)(struct curl_slist *, const char *
 static void (*curl_slist_free_all)(struct curl_slist *);
 
 
-
-/*** RUNTIME OPEN ***/
+// Runtime open
 
 static MTY_Atomic32 CURL_DL_LOCK;
 static MTY_SO *CURL_DL_SO;
@@ -90,16 +88,20 @@ static bool curl_dl_global_init(void)
 	MTY_GlobalLock(&CURL_DL_LOCK);
 
 	if (!CURL_DL_INIT) {
-		bool r = MTY_SOLoad("libcurl.so.3", &CURL_DL_SO);
+		bool r = true;
 
-		if (!r)
-			r = MTY_SOLoad("libcurl-gnutls.so.3", &CURL_DL_SO);
+		CURL_DL_SO = MTY_SOLoad("libcurl.so.3");
 
-		if (!r)
-			r = MTY_SOLoad("libcurl-nss.so.3", &CURL_DL_SO);
+		if (!CURL_DL_SO)
+			CURL_DL_SO = MTY_SOLoad("libcurl-gnutls.so.3");
 
-		if (!r)
+		if (!CURL_DL_SO)
+			CURL_DL_SO = MTY_SOLoad("libcurl-nss.so.3");
+
+		if (!CURL_DL_SO) {
+			r = false;
 			goto except;
+		}
 
 		#define LOAD_SYM(so, name) \
 			name = MTY_SOSymbolGet(so, #name); \

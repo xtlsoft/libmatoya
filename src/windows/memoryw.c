@@ -6,7 +6,27 @@
 
 #include "matoya.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+
 #include <winsock2.h>
+
+void *MTY_AllocAligned(size_t size, size_t align)
+{
+	void *mem = _aligned_malloc(size, align);
+
+	if (!mem)
+		MTY_Fatal("'_aligned_malloc' failed");
+
+	memset(mem, 0, size);
+
+	return mem;
+}
+
+void MTY_FreeAligned(void *mem)
+{
+	_aligned_free(mem);
+}
 
 uint16_t MTY_Swap16(uint16_t value)
 {
@@ -53,40 +73,42 @@ uint64_t MTY_SwapFromBE64(uint64_t value)
 	return ntohll(value);
 }
 
-char *MTY_WideToMulti(const wchar_t *src, char *dst, size_t len)
+bool MTY_WideToMulti(const wchar_t *src, char *dst, size_t len)
 {
-	if (!dst || len == 0) {
-		len = wcslen(src) + 1;
-		dst = MTY_Alloc(len, 4); // Maximum of 4 bytes per character
-	}
-
 	int32_t n = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, src, -1, dst,
 		(int32_t) len, NULL, NULL);
 
-	if (n > 0) {
-		dst[n] = '\0';
+	// WideCharToMultiByte will null terminate the output if -1 is supplied for the 'src' length,
+	// otherwise it will fail
+	if (n <= 0) {
+		DWORD e = GetLastError();
+		if (e != ERROR_NO_UNICODE_TRANSLATION)
+			MTY_Log("'WideCharToMultiByte' failed with error %x", e);
 
-	} else {
-		MTY_Log("'WideCharToMultiByte' failed with return value %d", n);
-		memset(dst, 0, len);
+		// Fall back to current code page translation
+		snprintf(dst, len, "%ls", src);
+		return false;
 	}
 
-	return dst;
+	return true;
 }
 
-wchar_t *MTY_MultiToWide(const char *src, wchar_t *dst, uint32_t len)
+bool MTY_MultiToWide(const char *src, wchar_t *dst, uint32_t len)
 {
-	if (!dst || len == 0) {
-		len = (uint32_t) strlen(src) + 1;
-		dst = MTY_Alloc(len, sizeof(WCHAR));
+	int32_t n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, src, -1, dst,
+		(int32_t) len);
+
+	// MutliByteToWideChar will null terminate the output if -1 is supplied for the 'src' length,
+	// otherwise it will fail
+	if (n <= 0) {
+		DWORD e = GetLastError();
+		if (e != ERROR_NO_UNICODE_TRANSLATION)
+			MTY_Log("'MultiByteToWideChar' failed with error %x", e);
+
+		// Fall back to current code page translation
+		_snwprintf_s(dst, len, _TRUNCATE, L"%hs", src);
+		return false;
 	}
 
-	int32_t n = MultiByteToWideChar(CP_UTF8, 0, src, -1, dst, (int32_t) len);
-
-	if (n != (int32_t) strlen(src) + 1) {
-		MTY_Log("'MultiByteToWideChar' failed with return value %d", n);
-		memset(dst, 0, len * sizeof(WCHAR));
-	}
-
-	return dst;
+	return true;
 }

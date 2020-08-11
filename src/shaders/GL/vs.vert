@@ -11,10 +11,10 @@
 attribute vec4 position;
 attribute vec2 texcoord;
 
-varying vec2 v_texcoord;
+varying vec2 vs_texcoord;
 
-void main(void) {
-	v_texcoord = texcoord;
-
+void main(void)
+{
+	vs_texcoord = texcoord;
 	gl_Position = position;
 }

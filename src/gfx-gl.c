@@ -6,16 +6,17 @@
 
 #include "gfx-gl.h"
 
-#include <math.h>
 #include <stdio.h>
 
 #include "gl-dl.h"
+#include "mty-viewport.h"
 #include "shaders/GL/vs.h"
 #include "shaders/GL/fs.h"
 
 #define NUM_STAGING 3
 
 struct gfx_gl {
+	MTY_ColorFormat format;
 	struct gfx_gl_rtv staging[NUM_STAGING];
 
 	GLuint vs;
@@ -32,7 +33,6 @@ struct gfx_gl {
 	GLuint loc_format;
 
 	float scale;
-	int32_t format;
 };
 
 struct gfx_gl_state {
@@ -152,7 +152,7 @@ bool gfx_gl_create(struct gfx_gl **gfx, const char *version)
 
 	for (uint8_t x = 0; x < NUM_STAGING; x++) {
 		char name[32];
-		snprintf(name, 32, "sample%u", x);
+		snprintf(name, 32, "tex%u", x);
 		ctx->loc_tex[x] = glGetUniformLocation(ctx->prog, name);
 	}
 
@@ -182,7 +182,12 @@ bool gfx_gl_create(struct gfx_gl **gfx, const char *version)
 
 	glGenFramebuffers(1, &ctx->dest_fb);
 
-	if (glGetError() != 0) {r = false; goto except;}
+	GLenum e = glGetError();
+	if (e != GL_NO_ERROR) {
+		MTY_Log("'glGetError' returned %d", e);
+		r = false;
+		goto except;
+	}
 
 	except:
 
@@ -194,53 +199,23 @@ bool gfx_gl_create(struct gfx_gl **gfx, const char *version)
 	return r;
 }
 
-static void gfx_gl_viewport(uint32_t width, uint32_t height,
-	uint32_t view_w, uint32_t view_h, float aspect_ratio, float scale)
-{
-	uint32_t constrain_w = lrint(scale * (float) width);
-	uint32_t constrain_h = lrint(scale * (float) height);
-
-	if (constrain_w == 0 || constrain_h == 0 || view_w < constrain_w || view_h < constrain_h) {
-		constrain_w = view_w;
-		constrain_h = view_h;
-	}
-
-	float swidth = (float) constrain_w;
-	float sheight = swidth / aspect_ratio;
-
-	if (swidth > (float) view_w) {
-		swidth = (float) view_w;
-		sheight = swidth / aspect_ratio;
-	}
-
-	if (sheight > (float) view_h) {
-		sheight = (float) view_h;
-		swidth = sheight * aspect_ratio;
-	}
-
-	GLint x = lrint(((float) view_w - swidth) / 2.0f);
-	GLint y = lrint(((float) view_h - sheight) / 2.0f);
-
-	glViewport(x, y, lrint(swidth), lrint(sheight));
-}
-
 static void gfx_gl_reload_textures(struct gfx_gl *ctx, const void *image, const MTY_RenderDesc *desc)
 {
 	switch (desc->format) {
 		case MTY_COLOR_FORMAT_RGBA: {
-			gfx_gl_rtv_refresh(&ctx->staging[0], GL_RGBA, desc->imageWidth, desc->cropHeight);
+			gfx_gl_rtv_refresh(&ctx->staging[0], GL_RGBA8, GL_RGBA, desc->imageWidth, desc->cropHeight);
 			glBindTexture(GL_TEXTURE_2D, ctx->staging[0].texture);
 			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, desc->imageWidth, desc->cropHeight, GL_RGBA, GL_UNSIGNED_BYTE, image);
 			break;
 		}
 		case MTY_COLOR_FORMAT_NV12: {
 			// Y
-			gfx_gl_rtv_refresh(&ctx->staging[0], GL_RED, desc->imageWidth, desc->cropHeight);
+			gfx_gl_rtv_refresh(&ctx->staging[0], GL_R8, GL_RED, desc->imageWidth, desc->cropHeight);
 			glBindTexture(GL_TEXTURE_2D, ctx->staging[0].texture);
 			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, desc->imageWidth, desc->cropHeight, GL_RED, GL_UNSIGNED_BYTE, image);
 
 			// UV
-			gfx_gl_rtv_refresh(&ctx->staging[1], GL_RG, desc->imageWidth / 2, desc->cropHeight / 2);
+			gfx_gl_rtv_refresh(&ctx->staging[1], GL_RG8, GL_RG, desc->imageWidth / 2, desc->cropHeight / 2);
 			glBindTexture(GL_TEXTURE_2D, ctx->staging[1].texture);
 			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, desc->imageWidth / 2, desc->cropHeight / 2, GL_RG, GL_UNSIGNED_BYTE, (uint8_t *) image + desc->imageWidth * desc->imageHeight);
 			break;
@@ -250,19 +225,19 @@ static void gfx_gl_reload_textures(struct gfx_gl *ctx, const void *image, const 
 			uint32_t div = desc->format == MTY_COLOR_FORMAT_I420 ? 2 : 1;
 
 			// Y
-			gfx_gl_rtv_refresh(&ctx->staging[0], GL_RED, desc->imageWidth, desc->cropHeight);
+			gfx_gl_rtv_refresh(&ctx->staging[0], GL_R8, GL_RED, desc->imageWidth, desc->cropHeight);
 			glBindTexture(GL_TEXTURE_2D, ctx->staging[0].texture);
 			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, desc->imageWidth, desc->cropHeight, GL_RED, GL_UNSIGNED_BYTE, image);
 
 			// U
 			uint8_t *p = (uint8_t *) image + desc->imageWidth * desc->imageHeight;
-			gfx_gl_rtv_refresh(&ctx->staging[1], GL_RED, desc->imageWidth / div, desc->cropHeight / div);
+			gfx_gl_rtv_refresh(&ctx->staging[1], GL_R8, GL_RED, desc->imageWidth / div, desc->cropHeight / div);
 			glBindTexture(GL_TEXTURE_2D, ctx->staging[1].texture);
 			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, desc->imageWidth / div, desc->cropHeight / div, GL_RED, GL_UNSIGNED_BYTE, p);
 
 			// V
 			p += (desc->imageWidth / div) * (desc->imageHeight / div);
-			gfx_gl_rtv_refresh(&ctx->staging[2], GL_RED, desc->imageWidth / div, desc->cropHeight / div);
+			gfx_gl_rtv_refresh(&ctx->staging[2], GL_R8, GL_RED, desc->imageWidth / div, desc->cropHeight / div);
 			glBindTexture(GL_TEXTURE_2D, ctx->staging[2].texture);
 			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, desc->imageWidth / div, desc->cropHeight / div, GL_RED, GL_UNSIGNED_BYTE, p);
 			break;
@@ -273,8 +248,10 @@ static void gfx_gl_reload_textures(struct gfx_gl *ctx, const void *image, const 
 bool gfx_gl_render(struct gfx_gl *ctx, const void *image, const MTY_RenderDesc *desc, GLuint dest)
 {
 	// Don't do anything until we have real data
-	if (desc->format != MTY_COLOR_FORMAT_UNKNOWN)
+	if (desc->format != MTY_COLOR_FORMAT_UNKNOWN) {
+		ctx->scale = (float) desc->cropWidth / (float) desc->imageWidth;
 		ctx->format = desc->format;
+	}
 
 	if (ctx->format == MTY_COLOR_FORMAT_UNKNOWN)
 		return true;
@@ -286,39 +263,12 @@ bool gfx_gl_render(struct gfx_gl *ctx, const void *image, const MTY_RenderDesc *
 	gfx_gl_reload_textures(ctx, image, desc);
 
 	// Viewport
-	gfx_gl_viewport(desc->cropWidth, desc->cropHeight, desc->viewWidth, desc->viewHeight,
-		desc->aspectRatio, desc->scale);
+	float vpx, vpy, vpw, vph;
+	mty_viewport(desc->cropWidth, desc->cropHeight, desc->viewWidth, desc->viewHeight,
+		desc->aspectRatio, desc->scale, &vpx, &vpy, &vpw, &vph);
+	glViewport(lrint(vpx), lrint(vpy), lrint(vpw), lrint(vph));
 
-	// Render pipeline
-	glDisable(GL_BLEND);
-	glDisable(GL_CULL_FACE);
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_SCISSOR_TEST);
-	glUseProgram(ctx->prog);
-
-	for (uint8_t x = 0; x < NUM_STAGING; x++) {
-		if (ctx->staging[x].texture) {
-			glActiveTexture(GL_TEXTURE0 + x);
-			glBindTexture(GL_TEXTURE_2D, ctx->staging[x].texture);
-			glUniform1i(ctx->loc_tex[x], x);
-		}
-	}
-
-	// Set uniforms if we have known data
-	if (desc->format != MTY_COLOR_FORMAT_UNKNOWN) {
-		ctx->scale = (float) desc->cropWidth / (float) desc->imageWidth;
-		ctx->format = desc->format;
-		glUniform1f(ctx->loc_scale, ctx->scale);
-		glUniform1i(ctx->loc_format, ctx->format);
-	}
-
-	glBindBuffer(GL_ARRAY_BUFFER, ctx->vb);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->eb);
-	glEnableVertexAttribArray(ctx->loc_pos);
-	glEnableVertexAttribArray(ctx->loc_uv);
-	glVertexAttribPointer(ctx->loc_pos, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), 0);
-	glVertexAttribPointer(ctx->loc_uv,  2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void *) (2 * sizeof(GLfloat)));
-
+	// Begin render pass (set destination texture if available)
 	if (dest) {
 		glBindFramebuffer(GL_FRAMEBUFFER, ctx->dest_fb);
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dest, 0);
@@ -327,6 +277,38 @@ bool gfx_gl_render(struct gfx_gl *ctx, const void *image, const MTY_RenderDesc *
 		glClear(GL_COLOR_BUFFER_BIT);
 	}
 
+	// Context state, set vertex and fragment shaders
+	glDisable(GL_BLEND);
+	glDisable(GL_CULL_FACE);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_SCISSOR_TEST);
+	glUseProgram(ctx->prog);
+
+	// Vertex shader
+	glBindBuffer(GL_ARRAY_BUFFER, ctx->vb);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->eb);
+	glEnableVertexAttribArray(ctx->loc_pos);
+	glEnableVertexAttribArray(ctx->loc_uv);
+	glVertexAttribPointer(ctx->loc_pos, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), 0);
+	glVertexAttribPointer(ctx->loc_uv,  2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void *) (2 * sizeof(GLfloat)));
+
+	// Fragment shader
+	for (uint8_t x = 0; x < NUM_STAGING; x++) {
+		if (ctx->staging[x].texture) {
+			glActiveTexture(GL_TEXTURE0 + x);
+			glBindTexture(GL_TEXTURE_2D, ctx->staging[x].texture);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glUniform1i(ctx->loc_tex[x], x);
+		}
+	}
+
+	glUniform1f(ctx->loc_scale, ctx->scale); // Used instead of a crop copy mechanism
+	glUniform1i(ctx->loc_format, ctx->format);
+
+	// Draw
 	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, 0);
 
 	gfx_gl_pop_state(&state);
@@ -375,8 +357,7 @@ void gfx_gl_destroy(struct gfx_gl **gfx)
 }
 
 
-
-/*** FAUX GL RENDER TARGET VIEWS ***/
+// Render Target Views
 
 void gfx_gl_rtv_destroy(struct gfx_gl_rtv *rtv)
 {
@@ -394,7 +375,7 @@ void gfx_gl_rtv_destroy(struct gfx_gl_rtv *rtv)
 	}
 }
 
-void gfx_gl_rtv_refresh(struct gfx_gl_rtv *rtv, GLint format, uint32_t w, uint32_t h)
+void gfx_gl_rtv_refresh(struct gfx_gl_rtv *rtv, GLint internal, GLenum format, uint32_t w, uint32_t h)
 {
 	if (!gl_dl_global_init())
 		return;
@@ -410,11 +391,7 @@ void gfx_gl_rtv_refresh(struct gfx_gl_rtv *rtv, GLint format, uint32_t w, uint32
 
 		glGenTextures(1, &rtv->texture);
 		glBindTexture(GL_TEXTURE_2D, rtv->texture);
-		glTexImage2D(GL_TEXTURE_2D, 0, format, w, h, 0, format, GL_UNSIGNED_BYTE, NULL);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexImage2D(GL_TEXTURE_2D, 0, internal, w, h, 0, format, GL_UNSIGNED_BYTE, NULL);
 
 		glGenFramebuffers(1, &rtv->fb);
 		glBindFramebuffer(GL_FRAMEBUFFER, rtv->fb);
@@ -446,8 +423,7 @@ void gfx_gl_rtv_blit_to_back_buffer(struct gfx_gl_rtv *rtv)
 }
 
 
-
-/*** MISC ***/
+// Misc
 
 void gfx_gl_finish(void)
 {

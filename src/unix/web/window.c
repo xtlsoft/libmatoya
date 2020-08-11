@@ -214,7 +214,7 @@ MTY_Texture *MTY_WindowGetBackBuffer(MTY_Window *ctx)
 		uint32_t height = 0;
 		web_get_size(&width, &height);
 
-		gfx_gl_rtv_refresh(&ctx->rtv, GL_RGBA, width, height);
+		gfx_gl_rtv_refresh(&ctx->rtv, GL_RGBA8, GL_RGBA, width, height);
 		ctx->back_buffer = ctx->rtv.texture;
 	}
 

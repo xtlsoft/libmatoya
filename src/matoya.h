@@ -15,13 +15,13 @@
 	#define MTY_EXPORT
 #endif
 
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 
 /// @module audio
+
 typedef struct MTY_Audio MTY_Audio;
 
 MTY_EXPORT bool
@@ -47,6 +47,7 @@ MTY_AudioDestroy(MTY_Audio **audio);
 
 
 /// @module cmacro
+
 #define MTY_MIN(a, b)  ((a) > (b) ? (b) : (a))
 #define MTY_MAX(a, b)  ((a) > (b) ? (a) : (b))
 #define MTY_ALIGN16(v) ((v) + 15 & ~((uintptr_t) 15))
@@ -54,6 +55,7 @@ MTY_AudioDestroy(MTY_Audio **audio);
 
 
 /// @module compress
+
 typedef enum {
 	MTY_IMAGE_PNG     = 1,
 	MTY_IMAGE_JPG     = 2,
@@ -78,6 +80,7 @@ MTY_Decompress(const void *input, size_t inputSize, void **output, size_t *outpu
 
 
 /// @module crypto
+
 #define MTY_CRYPTO_SHA1_SIZE       20
 #define MTY_CRYPTO_SHA1_HEX_SIZE   41
 
@@ -120,8 +123,8 @@ MTY_CryptoHashFile(MTY_Algorithm algo, const char *path, const void *key, size_t
 MTY_EXPORT void
 MTY_CryptoRandom(void *output, size_t size);
 
-MTY_EXPORT int32_t
-MTY_CryptoRandomInt(int32_t minVal, int32_t maxVal);
+MTY_EXPORT uint32_t
+MTY_CryptoRandomUInt(uint32_t minVal, uint32_t maxVal);
 
 MTY_EXPORT bool
 MTY_AESGCMCreate(const void *key, size_t keySize, MTY_AESGCM **aesgcm);
@@ -139,6 +142,7 @@ MTY_AESGCMDestroy(MTY_AESGCM **aesgcm);
 
 
 /// @module fs
+
 #define MTY_PATH_MAX 1280
 
 typedef enum {
@@ -149,10 +153,15 @@ typedef enum {
 } MTY_FsDir;
 
 typedef struct {
+	char *path;
+	char *name;
 	bool dir;
-	const char *path;
-	const char *name;
 } MTY_FileDesc;
+
+typedef struct {
+	MTY_FileDesc *files;
+	uint32_t len;
+} MTY_FileList;
 
 typedef struct MTY_LockFile MTY_LockFile;
 
@@ -163,7 +172,10 @@ MTY_EXPORT bool
 MTY_FsWrite(const char *path, const void *data, size_t size);
 
 MTY_EXPORT bool
-MTY_FsAppend(const char *path, const void *data, size_t size);
+MTY_FsWriteText(const char *path, const char *fmt, ...);
+
+MTY_EXPORT bool
+MTY_FsAppendText(const char *path, const char *fmt, ...);
 
 MTY_EXPORT bool
 MTY_FsDelete(const char *path);
@@ -177,6 +189,9 @@ MTY_FsMkdir(const char *path);
 MTY_EXPORT const char *
 MTY_FsPath(const char *dir, const char *file);
 
+MTY_EXPORT bool
+MTY_FsCopy(const char *src, const char *dst);
+
 MTY_EXPORT const char *
 MTY_FsGetDir(MTY_FsDir dir);
 
@@ -189,14 +204,15 @@ MTY_FsLockDestroy(MTY_LockFile **lock);
 MTY_EXPORT const char *
 MTY_FsName(const char *path, bool extension);
 
-MTY_EXPORT uint32_t
-MTY_FsList(const char *path, MTY_FileDesc **fi);
+MTY_EXPORT MTY_FileList *
+MTY_FsFileList(const char *path, const char *filter);
 
 MTY_EXPORT void
-MTY_FsFreeList(MTY_FileDesc **fi, uint32_t len);
+MTY_FsFreeFileList(MTY_FileList **fileList);
 
 
 /// @module json
+
 typedef struct MTY_JSON MTY_JSON;
 
 MTY_EXPORT bool
@@ -291,22 +307,33 @@ MTY_JSONArrayAppend(MTY_JSON *json, const MTY_JSON *value);
 
 
 /// @module log
+
+#define MTY_Log(msg, ...)   MTY_LogParams(__FUNCTION__, msg, ##__VA_ARGS__)
+#define MTY_Fatal(msg, ...) MTY_FatalParams(__FUNCTION__, msg, ##__VA_ARGS__)
+
 MTY_EXPORT void
 MTY_SetLogCallback(void (*callback)(const char *msg, void *opaque), const void *opaque);
 
 MTY_EXPORT void
-MTY_Log(const char *msg, ...);
+MTY_DisableLogging(bool disabled);
 
 MTY_EXPORT void
-MTY_Fatal(const char *msg, ...);
+MTY_LogParams(const char *func, const char *msg, ...);
+
+MTY_EXPORT void
+MTY_FatalParams(const char *func, const char *msg, ...);
 
 MTY_EXPORT const char *
 MTY_GetLog(void);
 
 
 /// @module mem
+
 MTY_EXPORT void *
 MTY_Alloc(size_t nelem, size_t elsize);
+
+MTY_EXPORT void *
+MTY_AllocAligned(size_t size, size_t align);
 
 MTY_EXPORT void *
 MTY_Realloc(void *mem, size_t nelem, size_t elsize);
@@ -319,6 +346,9 @@ MTY_Strdup(const void *str);
 
 MTY_EXPORT void
 MTY_Free(void *mem);
+
+MTY_EXPORT void
+MTY_FreeAligned(void *mem);
 
 MTY_EXPORT uint16_t
 MTY_Swap16(uint16_t value);
@@ -347,18 +377,25 @@ MTY_SwapFromBE32(uint32_t value);
 MTY_EXPORT uint64_t
 MTY_SwapFromBE64(uint64_t value);
 
-MTY_EXPORT char *
+MTY_EXPORT bool
 MTY_WideToMulti(const wchar_t *src, char *dst, size_t len);
 
-MTY_EXPORT wchar_t *
+MTY_EXPORT char *
+MTY_WideToMultiD(const wchar_t *src);
+
+MTY_EXPORT bool
 MTY_MultiToWide(const char *src, wchar_t *dst, uint32_t len);
+
+MTY_EXPORT wchar_t *
+MTY_MultiToWideD(const char *src);
 
 
 /// @module proc
-typedef void MTY_SO;
 
-MTY_EXPORT bool
-MTY_SOLoad(const char *name, MTY_SO **so);
+typedef struct MTY_SO MTY_SO;
+
+MTY_EXPORT MTY_SO *
+MTY_SOLoad(const char *name);
 
 MTY_EXPORT void *
 MTY_SOSymbolGet(MTY_SO *ctx, const char *name);
@@ -370,13 +407,14 @@ MTY_EXPORT const char *
 MTY_ProcName(void);
 
 MTY_EXPORT bool
-MTY_ProcRestart(int32_t argc, const char **argv);
+MTY_ProcRestart(int32_t argc, char * const *argv);
 
 MTY_EXPORT const char *
 MTY_Hostname(void);
 
 
 /// @module render
+
 typedef enum {
 	MTY_GFX_NONE    = 0,
 	MTY_GFX_GL      = 1,
@@ -441,6 +479,7 @@ MTY_RendererDestroy(MTY_Renderer **renderer);
 
 
 /// @module request
+
 #define MTY_URL_MAX 1024
 
 typedef struct MTY_Request MTY_Request;
@@ -463,11 +502,13 @@ MTY_RequestDestroy(MTY_Request **response);
 
 
 /// @module sort
+
 MTY_EXPORT void
 MTY_Sort(void *base, size_t nElements, size_t size, int32_t (*compare)(const void *a, const void *b));
 
 
 /// @module struct
+
 typedef struct MTY_ListNode {
 	void *value;
 	struct MTY_ListNode *prev;
@@ -558,6 +599,7 @@ MTY_ListDestroy(MTY_List **list, void (*freeFunc)(void *value));
 
 
 /// @module thread
+
 typedef enum {
 	MTY_THREAD_STATE_EMPTY    = 0,
 	MTY_THREAD_STATE_RUNNING  = 1,
@@ -694,6 +736,7 @@ MTY_GlobalUnlock(MTY_Atomic32 *lock);
 
 
 /// @module time
+
 MTY_EXPORT int64_t
 MTY_Timestamp(void);
 
@@ -711,6 +754,7 @@ MTY_RevertTimerResolution(uint32_t res);
 
 
 // @module window
+
 #define MTY_TITLE_MAX 1024
 
 typedef enum {

@@ -9,8 +9,7 @@
 #include "GL/glcorearb30.h"
 
 
-
-/*** X INTERFACE ***/
+// X interface
 
 // Reference: https://code.woboq.org/qt5/include/X11/
 
@@ -344,8 +343,7 @@ static int (*XGetInputFocus)(Display *display, Window *focus_return, int *revert
 static char *(*XGetDefault)(Display *display, const char *program, const char *option);
 
 
-
-/*** GLX INTERFACE ***/
+// GLX interface
 
 // Reference: https://code.woboq.org/qt5/include/GL/
 
@@ -380,8 +378,7 @@ static Bool (*glXMakeCurrent)(Display *dpy, GLXDrawable drawable, GLXContext ctx
 static void (*glXSwapIntervalEXT)(Display *dpy, GLXDrawable drawable, int interval);
 
 
-
-/*** RUNTIME OPEN ***/
+// Runtime open
 
 static MTY_Atomic32 X_DL_LOCK;
 static MTY_SO *X_DL_GLX_SO;
@@ -400,16 +397,18 @@ static bool x_dl_global_init(void)
 	MTY_GlobalLock(&X_DL_LOCK);
 
 	if (!X_DL_INIT) {
-		bool r = MTY_SOLoad("libX11.so.6", &X_DL_SO);
-		if (!r)
-			r = MTY_SOLoad("libX11.so", &X_DL_SO);
+		bool r = true;
 
-		if (!r)
-			goto except;
+		X_DL_SO = MTY_SOLoad("libX11.so.6");
+		if (!X_DL_SO)
+			X_DL_SO = MTY_SOLoad("libX11.so");
 
-		r = MTY_SOLoad("libGL.so.1", &X_DL_GLX_SO);
-		if (!r)
+		X_DL_GLX_SO = MTY_SOLoad("libGL.so.1");
+
+		if (!X_DL_SO || !X_DL_GLX_SO) {
+			r = false;
 			goto except;
+		}
 
 		#define LOAD_SYM(so, name) \
 			name = MTY_SOSymbolGet(so, #name); \

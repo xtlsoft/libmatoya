@@ -10,7 +10,7 @@
 
 #include <pthread.h>
 
-static void rwlockattr_set(pthread_rwlockattr_t *attr)
+static void mty_rwlockattr_set(pthread_rwlockattr_t *attr)
 {
 	int32_t e = pthread_rwlockattr_setkind_np(attr, PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP);
 	if (e != 0)

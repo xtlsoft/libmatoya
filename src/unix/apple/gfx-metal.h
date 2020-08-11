@@ -8,11 +8,11 @@
 
 #include "matoya.h"
 
-#include <Metal/Metal.h>
-
 struct gfx_metal;
 
-bool gfx_metal_init(id<MTLDevice> device, struct gfx_metal **gfx);
-void gfx_metal_render(struct gfx_metal *ctx, id<MTLCommandQueue> cq,
-	const void *image, const MTY_RenderDesc *desc, id<MTLTexture> dest);
+bool gfx_metal_create(MTY_Device *mty_device, struct gfx_metal **gfx);
+bool gfx_metal_render(struct gfx_metal *ctx, MTY_Context *mty_context,
+	const void *image, const MTY_RenderDesc *desc, MTY_Texture *mty_dest);
 void gfx_metal_destroy(struct gfx_metal **gfx);
+
+MTY_Device *gfx_metal_device(MTY_Context *context);

@@ -2,19 +2,25 @@ OS = windows
 ARCH = %%Platform%%
 NAME = matoya
 
-.SUFFIXES : .ps4 .vs4 .vert .frag
+.SUFFIXES : .ps4 .vs4 .ps3 .vs3 .vert .frag
 
 .vs4.h:
-	fxc $(FXCFLAGS) /Fh $@ /T vs_4_0 /Vn $(*B) $<
+	@fxc $(FXCFLAGS) /Fh $@ /T vs_4_0 /Vn $(*B) $<
 
 .ps4.h:
-	fxc $(FXCFLAGS) /Fh $@ /T ps_4_0 /Vn $(*B) $<
+	@fxc $(FXCFLAGS) /Fh $@ /T ps_4_0 /Vn $(*B) $<
+
+.vs3.h:
+	@fxc $(FXCFLAGS) /Fh $@ /T vs_3_0 /Vn $(*B) $<
+
+.ps3.h:
+	@fxc $(FXCFLAGS) /Fh $@ /T ps_3_0 /Vn $(*B) $<
 
 .vert.h:
-	echo static const GLchar VERT[]={ > $@ && powershell "Format-Hex $< | %{$$_ -replace '^.*?   ',''} | %{$$_ -replace '  .*',' '} | %{$$_ -replace '(\w\w)','0x$$1,'}" >> $@ && echo 0x00}; >> $@
+	@echo static const GLchar VERT[]={ > $@ && powershell "Format-Hex $< | %{$$_ -replace '^.*?   ',''} | %{$$_ -replace '  .*',' '} | %{$$_ -replace '(\w\w)','0x$$1,'}" >> $@ && echo 0x00}; >> $@
 
 .frag.h:
-	echo static const GLchar FRAG[]={ > $@ && powershell "Format-Hex $< | %{$$_ -replace '^.*?   ',''} | %{$$_ -replace '  .*',' '} | %{$$_ -replace '(\w\w)','0x$$1,'}" >> $@ && echo 0x00}; >> $@
+	@echo static const GLchar FRAG[]={ > $@ && powershell "Format-Hex $< | %{$$_ -replace '^.*?   ',''} | %{$$_ -replace '  .*',' '} | %{$$_ -replace '(\w\w)','0x$$1,'}" >> $@ && echo 0x00}; >> $@
 
 OBJS = \
 	src\compress.obj \
@@ -29,7 +35,8 @@ OBJS = \
 	src\list.obj \
 	src\queue.obj \
 	src\thread.obj \
-	src\gfx-gl.obj
+	src\gfx-gl.obj \
+	src\render.obj
 
 OBJS = $(OBJS) \
 	src\windows\audio.obj \
@@ -37,18 +44,21 @@ OBJS = $(OBJS) \
 	src\windows\fsw.obj \
 	src\windows\memoryw.obj \
 	src\windows\procw.obj \
-	src\windows\render.obj \
 	src\windows\request.obj \
 	src\windows\threadw.obj \
-	src\windows\timew.obj \
+	src\windows\time.obj \
 	src\windows\window.obj \
-	src\windows\gfx-d3d11.obj
+	src\windows\gfx-d3d9.obj \
+	src\windows\gfx-d3d11.obj \
+	src\windows\aes-gcm-bcrypt.obj
 
 SHADERS = \
 	src\shaders\GL\vs.h \
 	src\shaders\GL\fs.h \
-	src\windows\shaders\vs.h \
-	src\windows\shaders\ps.h
+	src\windows\shaders\d3d11\vs.h \
+	src\windows\shaders\d3d11\ps.h \
+	src\windows\shaders\d3d9\vs.h \
+	src\windows\shaders\d3d9\ps.h
 
 INCLUDES = \
 	-Isrc \
@@ -78,7 +88,12 @@ FLAGS = \
 LIB_FLAGS = \
 	/nologo
 
-SYS_LIBS = \
+TEST_FLAGS = \
+	$(LIB_FLAGS) \
+	/nodefaultlib \
+	/subsystem:console
+
+TEST_LIBS = \
 	libvcruntime.lib \
 	libucrt.lib \
 	libcmt.lib \
@@ -90,14 +105,15 @@ SYS_LIBS = \
 	ole32.lib \
 	uuid.lib \
 	winmm.lib \
-	shcore.lib \
 	bcrypt.lib \
 	shlwapi.lib \
 	winhttp.lib \
-	ws2_32.lib
+	ws2_32.lib \
+	opengl32.lib
 
 !IFDEF DEBUG
 FLAGS = $(FLAGS) /Oy- /Ob0 /Zi
+TEST_FLAGS = $(TEST_FLAGS) /debug
 !ELSE
 FLAGS = $(FLAGS) /O2 /Gy /GS- /Gw
 !IFDEF LTO
@@ -112,16 +128,16 @@ all: clean-build clear $(SHADERS) $(OBJS)
 	mkdir bin\$(OS)\$(ARCH)
 	lib /out:bin\$(OS)\$(ARCH)\$(NAME).lib $(LIB_FLAGS) *.obj
 
-# The 'shared' target is here to test a full link and required system dependencies
-shared: clean-build clear $(SHADERS) $(OBJS)
-	link /out:$(NAME).dll /dll /nodefaultlib $(LIB_FLAGS) $(SYS_LIBS) *.obj
+test: all src\test.obj
+	link /out:mty-test.exe $(TEST_FLAGS) *.obj $(TEST_LIBS)
+	mty-test.exe
 
 clean-build:
 	@-rmdir /s /q bin 2>nul
 	@-del /q *.obj 2>nul
 	@-del /q *.lib 2>nul
 	@-del /q *.pdb 2>nul
-	@-del /q $(NAME).dll 2>nul
+	@-del /q mty-test.exe 2>nul
 
 clean: clean-build
 	@-del /q $(SHADERS) 2>nul

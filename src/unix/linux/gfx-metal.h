@@ -6,15 +6,9 @@
 
 #pragma once
 
-#include <stdbool.h>
-#include <errno.h>
+struct gfx_metal;
 
-#include "mty-execv.h"
-
-static bool proc_execv(const char *name, const char **argv)
-{
-	execv(name, (char * const *) argv);
-	MTY_Log("'execv' failed with errno %d", errno);
-
-	return false;
-}
+#define gfx_metal_create(mty_device, gfx) (MTY_Log("MTY_GFX_METAL is unimplemented"), false)
+#define gfx_metal_render(ctx, mty_context, image, desc, mty_dest) false
+#define gfx_metal_destroy(gfx)
+#define gfx_metal_device(context) NULL

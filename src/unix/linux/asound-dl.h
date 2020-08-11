@@ -10,8 +10,7 @@
 #include <errno.h>
 
 
-
-/*** INTERFACE ***/
+// Interface
 
 typedef struct _snd_pcm snd_pcm_t;
 typedef struct _snd_pcm_hw_params snd_pcm_hw_params_t;
@@ -151,8 +150,7 @@ static snd_pcm_uframes_t (*snd_pcm_status_get_avail)(const snd_pcm_status_t *obj
 static snd_pcm_uframes_t (*snd_pcm_status_get_avail_max)(const snd_pcm_status_t *obj);
 
 
-
-/*** RUNTIME OPEN ***/
+// Runtime open
 
 static MTY_Atomic32 ASOUND_DL_LOCK;
 static MTY_SO *ASOUND_DL_SO;
@@ -169,10 +167,14 @@ static bool asound_dl_global_init(void)
 	MTY_GlobalLock(&ASOUND_DL_LOCK);
 
 	if (!ASOUND_DL_INIT) {
-		bool r = MTY_SOLoad("libasound.so.2", &ASOUND_DL_SO);
+		bool r = true;
 
-		if (!r)
+		ASOUND_DL_SO = MTY_SOLoad("libasound.so.2");
+
+		if (!ASOUND_DL_SO) {
+			r = false;
 			goto except;
+		}
 
 		#define LOAD_SYM(so, name) \
 			name = MTY_SOSymbolGet(so, #name); \

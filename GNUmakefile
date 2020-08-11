@@ -5,10 +5,10 @@ NAME = libmatoya
 .SUFFIXES: .vert .frag
 
 .vert.h:
-	hexdump -ve '1/1 "0x%.2x,"' $< | (echo 'static const GLchar VERT[]={' && cat && echo '0x00};') > $@
+	@hexdump -ve '1/1 "0x%.2x,"' $< | (echo 'static const GLchar VERT[]={' && cat && echo '0x00};') > $@
 
 .frag.h:
-	hexdump -ve '1/1 "0x%.2x,"' $< | (echo 'static const GLchar FRAG[]={' && cat && echo '0x00};') > $@
+	@hexdump -ve '1/1 "0x%.2x,"' $< | (echo 'static const GLchar FRAG[]={' && cat && echo '0x00};') > $@
 
 .m.o:
 	$(CC) $(OCFLAGS)  -c -o $@ $<
@@ -26,16 +26,20 @@ OBJS = \
 	src/list.o \
 	src/queue.o \
 	src/thread.o \
+	src/gfx-gl.o \
+	src/render.o
 
 OBJS := $(OBJS) \
-	src/unix/crypto.o \
 	src/unix/fs.o \
 	src/unix/memory.o \
 	src/unix/proc.o \
 	src/unix/request.o \
 	src/unix/thread.o \
-	src/unix/time.o \
-	src/gfx-gl.o
+	src/unix/time.o
+
+SHADERS = \
+	src/shaders/GL/vs.h \
+	src/shaders/GL/fs.h
 
 INCLUDES = \
 	-Isrc \
@@ -53,6 +57,9 @@ FLAGS = \
 	-Wno-switch \
 	-std=c99 \
 	-fPIC
+
+TEST_FLAGS = \
+	-nodefaultlibs
 
 ifdef DEBUG
 FLAGS := $(FLAGS) -O0 -g
@@ -85,12 +92,7 @@ ARCH := wasm32
 endif
 
 OBJS := $(OBJS) \
-	src/unix/web/window.o \
-	src/unix/linux/render.o
-
-SHADERS = \
-	src/shaders/GL/vs.h \
-	src/shaders/GL/fs.h
+	src/unix/web/window.o
 
 DEFS := $(DEFS) \
 	-DMTY_GL_EXTERNAL \
@@ -106,18 +108,15 @@ else
 ifeq ($(UNAME_S), Linux)
 
 OBJS := $(OBJS) \
+	src/unix/crypto.o \
+	src/unix/aes-gcm-openssl.o \
 	src/unix/linux/audio.o \
-	src/unix/linux/window.o \
-	src/unix/linux/render.o
+	src/unix/linux/window.o
 
 DEFS := $(DEFS) \
 	-DMTY_CRYPTO_EXTERNAL
 
-SHADERS = \
-	src/shaders/GL/vs.h \
-	src/shaders/GL/fs.h
-
-SYS_LIBS = \
+TEST_LIBS = \
 	-lc \
 	-lm \
 	-ldl \
@@ -146,6 +145,7 @@ ARCH = x86_64
 endif
 
 ifeq ($(TARGET), macosx)
+export MACOSX_DEPLOYMENT_TARGET=10.11
 OS = macos
 else ifeq ($(TARGET), iphoneos)
 OS = ios
@@ -157,23 +157,22 @@ else ifeq ($(TARGET), appletvsimulator)
 OS = tvos
 endif
 
-SHADERS = \
-	src/shaders/GL/vs.h \
-	src/shaders/GL/fs.h \
-	src/unix/apple/shaders/shaders.h
-
 OBJS := $(OBJS) \
 	src/unix/apple/gfx-metal.o \
-	src/unix/apple/render.o \
+	src/unix/apple/aes-gcm-cc.o \
 	src/unix/apple/audio.o \
+	src/unix/apple/crypto.o \
 	src/unix/apple/$(OS)/window.o
 
-DEFS := $(DEFS) \
-	-DMTY_GL_EXTERNAL \
-	-DMTY_CRYPTO_EXTERNAL
+SHADERS := $(SHADERS) \
+	src/unix/apple/shaders/shaders.h
 
-SYS_LIBS = \
+DEFS := $(DEFS) \
+	-DMTY_GL_EXTERNAL
+
+TEST_LIBS = \
 	-lc \
+	-framework OpenGL \
 	-framework AppKit \
 	-framework QuartzCore \
 	-framework Metal \
@@ -197,12 +196,12 @@ objs: $(OBJS)
 	mkdir -p bin/$(OS)/$(ARCH)
 	$(AR) -crs bin/$(OS)/$(ARCH)/$(NAME).a $(OBJS)
 
-# The 'shared' target is here to test a full link and required system dependencies
-shared: clean-build clear $(SHADERS)
-	make objs-shared -j4
+test: clean-build clear $(SHADERS)
+	make objs-test -j4
 
-objs-shared: $(OBJS)
-	$(CC) -Wl,--unresolved-symbols=report-all -shared -nodefaultlibs -o $(NAME).so $(OBJS) $(SYS_LIBS)
+objs-test: $(OBJS) src/test.o
+	$(CC) -o mty-test $(TEST_FLAGS) $(OBJS) src/test.o $(TEST_LIBS)
+	./mty-test
 
 ###############
 ### ANDROID ###
@@ -216,7 +215,8 @@ ANDROID_NDK = $(HOME)/android-ndk-r21d
 android: clear $(SHADERS)
 	@$(ANDROID_NDK)/ndk-build -j4 \
 		NDK_PROJECT_PATH=. \
-		NDK_APPLICATION_MK=Application.mk \
+		APP_BUILD_SCRIPT=Android.mk \
+		APP_PLATFORM=android-23 \
 		--no-print-directory \
 		| grep -v 'fcntl(): Operation not supported'
 
@@ -224,6 +224,7 @@ clean: clean-build
 	@rm -rf bin
 	@rm -rf obj
 	@rm -f $(SHADERS)
+	@rm -f mty-test
 
 clean-build:
 	@rm -f $(OBJS)

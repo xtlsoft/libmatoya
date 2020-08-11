@@ -10,26 +10,22 @@
 
 #include <windows.h>
 
-#include "wchar.h"
 #include "mty-tls.h"
 
 static MTY_TLS char PROC_NAME[MTY_PATH_MAX];
 static MTY_TLS char PROC_HOSTNAME[MTY_PATH_MAX];
 
-bool MTY_SOLoad(const char *name, MTY_SO **so)
+MTY_SO *MTY_SOLoad(const char *name)
 {
-	wchar_t *wname = MTY_MultiToWide(name, NULL, 0);
+	wchar_t *wname = MTY_MultiToWideD(name);
 
-	*so = (MTY_SO *) LoadLibrary(wname);
-
+	MTY_SO *so = (MTY_SO *) LoadLibrary(wname);
 	MTY_Free(wname);
 
-	if (!*so) {
+	if (!so)
 		MTY_Log("'LoadLibrary' failed to find '%s' with error %x", name, GetLastError());
-		return false;
-	}
 
-	return true;
+	return so;
 }
 
 void *MTY_SOSymbolGet(MTY_SO *ctx, const char *name)
@@ -73,13 +69,13 @@ const char *MTY_Hostname(void)
 	memset(PROC_HOSTNAME, 0, MTY_PATH_MAX);
 
 	DWORD lenw = MAX_COMPUTERNAME_LENGTH + 1;
-	WCHAR hostnamew[MAX_COMPUTERNAME_LENGTH + 1] = {0};
+	wchar_t hostnamew[MAX_COMPUTERNAME_LENGTH + 1];
 
-	if (GetComputerNameW(hostnamew, &lenw)) {
+	if (GetComputerName(hostnamew, &lenw)) {
 		MTY_WideToMulti(hostnamew, PROC_HOSTNAME, MTY_PATH_MAX);
 
 	} else {
-		MTY_Log("'GetComputerNameW' failed with error %x", GetLastError());
+		MTY_Log("'GetComputerName' failed with error %x", GetLastError());
 		snprintf(PROC_HOSTNAME, MTY_PATH_MAX, "noname");
 	}
 

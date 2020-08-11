@@ -6,4 +6,4 @@
 
 #pragma once
 
-#define rwlockattr_set(attr)
+#define mty_rwlockattr_set(attr)

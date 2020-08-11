@@ -9,6 +9,7 @@ FLAGS = \
 	-Wno-unused-parameter \
 	-Wno-switch \
 	-Wno-atomic-alignment \
+	-Wno-unknown-pragmas \
 	-std=c99 \
 	-fPIC
 
@@ -31,9 +32,10 @@ LOCAL_C_INCLUDES = \
 	deps
 
 DEFS = \
+	-D_POSIX_C_SOURCE=200112L \
+	-DMTY_GL_ES \
 	-DMTY_GL_EXTERNAL \
-	-DMTY_CRYPTO_EXTERNAL \
-	-D_POSIX_C_SOURCE=200112L
+	-DMTY_CRYPTO_EXTERNAL
 
 LOCAL_CFLAGS = $(DEFS) $(FLAGS)
 
@@ -51,6 +53,7 @@ LOCAL_SRC_FILES := \
 	src/queue.c \
 	src/thread.c \
 	src/gfx-gl.c \
+	src/render.c \
 	src/unix/crypto.c \
 	src/unix/fs.c \
 	src/unix/memory.c \
@@ -58,7 +61,7 @@ LOCAL_SRC_FILES := \
 	src/unix/request.c \
 	src/unix/thread.c \
 	src/unix/time.c \
-	src/unix/linux/render.c \
+	src/unix/aes-gcm-openssl.c \
 	src/unix/android/window.c \
 	src/unix/android/audio.c
 

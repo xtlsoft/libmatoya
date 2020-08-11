@@ -6,4 +6,15 @@
 
 #pragma once
 
-#include <linux/limits.h>
+#include <time.h>
+#include <errno.h>
+
+static void mty_sleep_ms(uint32_t timeout)
+{
+	struct timespec ts = {0};
+	ts.tv_sec = timeout / 1000;
+	ts.tv_nsec = (timeout % 1000) * 1000 * 1000;
+
+	if (nanosleep(&ts, NULL) != 0)
+		MTY_Log("'nanosleep' failed with errno %d", errno);
+}

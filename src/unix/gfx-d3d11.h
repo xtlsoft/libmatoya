@@ -6,15 +6,8 @@
 
 #pragma once
 
-#include <stdbool.h>
-#include <process.h>
+struct gfx_d3d11;
 
-static bool proc_execv(const char *name, const char **argv)
-{
-	// FIXME This is probably not unicode compatible
-
-	_execv(name, (char * const *) argv);
-	MTY_Log("'_execv' failed with errno %d", errno);
-
-	return false;
-}
+#define gfx_d3d11_create(mty_device, gfx) (MTY_Log("MTY_GFX_D3D11 is unimplemented"), false)
+#define gfx_d3d11_render(ctx, device, context, image, desc, dest) false
+#define gfx_d3d11_destroy(gfx)

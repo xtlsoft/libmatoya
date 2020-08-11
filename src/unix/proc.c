@@ -12,26 +12,25 @@
 
 #include <unistd.h>
 
-#include "mty-limits.h"
 #include "mty-dlopen.h"
 #include "mty-tls.h"
+#include "mty-procname.h"
 
 static MTY_TLS char PROC_NAME[MTY_PATH_MAX];
 static MTY_TLS char PROC_HOSTNAME[MTY_PATH_MAX];
 
-bool MTY_SOLoad(const char *name, MTY_SO **so)
+MTY_SO *MTY_SOLoad(const char *name)
 {
-	*so = dlopen(name, MTY_DLOPEN_FLAGS);
-	if (!*so) {
+	MTY_SO *so = dlopen(name, MTY_DLOPEN_FLAGS);
+	if (!so) {
 		const char *estr = dlerror();
 		if (estr)
 			MTY_Log("%s", estr);
 
 		MTY_Log("'dlopen' failed to find '%s'", name);
-		return false;
 	}
 
-	return true;
+	return so;
 }
 
 void *MTY_SOSymbolGet(MTY_SO *ctx, const char *name)
@@ -69,11 +68,7 @@ void MTY_SOUnload(MTY_SO **so)
 
 const char *MTY_ProcName(void)
 {
-	memset(PROC_NAME, 0, MTY_PATH_MAX);
-
-	ssize_t n = readlink("/proc/self/exe", PROC_NAME, MTY_PATH_MAX - 1);
-	if (n < 0)
-		MTY_Log("'readlink' failed with errno %d", errno);
+	mty_proc_name(PROC_NAME, MTY_PATH_MAX);
 
 	return PROC_NAME;
 }

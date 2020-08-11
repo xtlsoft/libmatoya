@@ -17,41 +17,54 @@ static void log_none(const char *msg, void *opaque)
 {
 }
 
-// Global
 static void (*LOG_CALLBACK)(const char *msg, void *opaque) = log_none;
 static void *LOG_OPAQUE;
 
-// Thread local
 static MTY_TLS char LOG_MSG[LOG_LEN];
+static MTY_TLS char LOG_FMT[LOG_LEN];
+static MTY_TLS bool LOG_PREVENT_RECURSIVE;
+static MTY_Atomic32 LOG_DISABLED;
 
-static void log_internal(const char *msg, va_list args)
+static void log_internal(const char *func, const char *msg, va_list args)
 {
-	vsnprintf(LOG_MSG, LOG_LEN, msg, args);
+	if (MTY_Atomic32Get(&LOG_DISABLED) || LOG_PREVENT_RECURSIVE)
+		return;
+
+	snprintf(LOG_FMT, LOG_LEN, "%s: %s", func, msg);
+	vsnprintf(LOG_MSG, LOG_LEN, LOG_FMT, args);
+
+	LOG_PREVENT_RECURSIVE = true;
 	LOG_CALLBACK(LOG_MSG, LOG_OPAQUE);
+	LOG_PREVENT_RECURSIVE = false;
 }
 
-void MTY_Log(const char *msg, ...)
+void MTY_LogParams(const char *func, const char *msg, ...)
 {
 	va_list args;
 	va_start(args, msg);
-	log_internal(msg, args);
+	log_internal(func, msg, args);
 	va_end(args);
 }
 
-void MTY_Fatal(const char *msg, ...)
+void MTY_FatalParams(const char *func, const char *msg, ...)
 {
 	va_list args;
 	va_start(args, msg);
-	log_internal(msg, args);
+	log_internal(func, msg, args);
 	va_end(args);
 
-	abort();
+	_Exit(EXIT_FAILURE);
 }
 
 void MTY_SetLogCallback(void (*callback)(const char *msg, void *opaque), const void *opaque)
 {
-	LOG_CALLBACK = callback;
+	LOG_CALLBACK = callback ? callback : log_none;
 	LOG_OPAQUE = (void *) opaque;
+}
+
+void MTY_DisableLogging(bool disabled)
+{
+	MTY_Atomic32Set(&LOG_DISABLED, disabled ? 1 : 0);
 }
 
 const char *MTY_GetLog(void)

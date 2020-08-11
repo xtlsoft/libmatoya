@@ -6,7 +6,7 @@
 - Wrap old, cumbersome interfaces into modern, ergonomic interfaces
 - Bundle common application tasks into a single dependency
 
-The name comes from a character in [Final Fantasy](https://en.wikipedia.org/wiki/Final_Fantasy) who needs a crystal eye to see.
+The name comes from a character in [Final Fantasy](https://en.wikipedia.org/wiki/Final_Fantasy_(video_game)) who needs a crystal eye to see.
 
 The development of this library is closely tied to [Merton](https://github.com/matoya/merton).
 
@@ -38,6 +38,9 @@ make TARGET=appletvsimulator
 ```
 #### Web
 ```shell
+# By default, WASM=1 builds a WASI compatible binary. It will build an Esmcripten
+# compatible binary if the Emscripten environment is present
+
 # Must be built on a Unix environment
 make WASM=1
 ```

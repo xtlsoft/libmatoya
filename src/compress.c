@@ -6,12 +6,12 @@
 
 #include "matoya.h"
 
-#include <stdio.h>
-#include <limits.h>
 #include <assert.h>
+#include <limits.h>
 #include <math.h>
-#include <string.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
 	#include <emmintrin.h>
@@ -22,15 +22,6 @@
 	#include <arm_neon.h>
 #endif
 
-#if !defined(_WIN32)
-	#pragma GCC diagnostic ignored "-Wunused-function"
-	#pragma GCC diagnostic ignored "-Wsign-compare"
-
-	#if !defined(__clang__)
-		#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
-	#endif
-#endif
-
 #define STBI_MALLOC(size)        MTY_Alloc(size, 1)
 #define STBI_REALLOC(ptr, size)  MTY_Realloc(ptr, size, 1)
 #define STBI_FREE(ptr)           MTY_Free(ptr)
@@ -39,20 +30,10 @@
 #define STBIW_MALLOC(size)       MTY_Alloc(size, 1)
 #define STBIW_REALLOC(ptr, size) MTY_Realloc(ptr, size, 1)
 #define STBIW_FREE(ptr)          MTY_Free(ptr)
+#define STBIW_ASSERT(x)
 
-#define STBIR_MALLOC(size, c)    ((void) (c), MTY_Alloc(size, 1))
-#define STBIR_FREE(ptr, c)       ((void) (c), MTY_Free(ptr))
-
-#define STB_IMAGE_IMPLEMENTATION
-#define STBI_NO_STDIO
-#define STBI_NO_LINEAR
-#define STBI_NO_HDR
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#define STBI_WRITE_NO_STDIO
-#define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include "stb/stb_image.h"
 #include "stb/stb_image_write.h"
-#include "stb/stb_image_resize.h"
 
 struct image_write {
 	void *output;
@@ -61,8 +42,6 @@ struct image_write {
 
 bool MTY_ImageDecompress(const void *input, size_t size, void **output, uint32_t *width, uint32_t *height)
 {
-	bool r = true;
-
 	int32_t channels = 0;
 	*output = stbi_load_from_memory(input, (int32_t) size, (int32_t *) width, (int32_t *) height, &channels, 4);
 
@@ -71,31 +50,31 @@ bool MTY_ImageDecompress(const void *input, size_t size, void **output, uint32_t
 			MTY_Log("%s", stbi__g_failure_reason);
 
 		MTY_Log("'stbi_load_from_memory' failed");
-		r = false;
+		return false;
 	}
 
-	return r;
+	return true;
 }
 
-static void image_center_crop(uint32_t width, uint32_t height, uint32_t target_width, uint32_t target_height,
-	uint32_t *crop_width, uint32_t *crop_height)
+static void image_center_crop(uint32_t w, uint32_t h, uint32_t target_w, uint32_t target_h,
+	uint32_t *crop_w, uint32_t *crop_h)
 {
 	float m = 1.0f;
 
-	if (width < target_width) {
-		m = (float) target_width / (float) width;
-		width = target_width;
-		height = lrint((float) height * m);
+	if (w < target_w) {
+		m = (float) target_w / (float) w;
+		w = target_w;
+		h = lrint((float) h * m);
 	}
 
-	if (height < target_height) {
-		m = (float) target_height / (float) height;
-		height = target_height;
-		width = lrint((float) width * m);
+	if (h < target_h) {
+		m = (float) target_h / (float) h;
+		h = target_h;
+		w = lrint((float) w * m);
 	}
 
-	*crop_width = (target_width > 0 && width > target_width) ? lrint((float) (width - target_width) / m) : 0;
-	*crop_height = (target_height > 0 && height > target_height) ? lrint((float) (height - target_height) / m) : 0;
+	*crop_w = (target_w > 0 && w > target_w) ? lrint((float) (w - target_w) / m) : 0;
+	*crop_h = (target_h > 0 && h > target_h) ? lrint((float) (h - target_h) / m) : 0;
 }
 
 void *MTY_ImageCrop(const void *image, uint32_t cropWidth, uint32_t cropHeight, uint32_t *width, uint32_t *height)
@@ -134,7 +113,6 @@ static void image_compress_write_func(void *context, void *data, int size)
 
 bool MTY_ImageCompress(const void *input, uint32_t width, uint32_t height, MTY_Image type, void **output, size_t *outputSize)
 {
-	bool r = true;
 	struct image_write ctx = {0};
 	int32_t e = 0;
 
@@ -143,7 +121,8 @@ bool MTY_ImageCompress(const void *input, uint32_t width, uint32_t height, MTY_I
 			e = stbi_write_png_to_func(image_compress_write_func, &ctx, width, height, 4, input, width * 4);
 			break;
 		case MTY_IMAGE_JPG:
-			e = stbi_write_jpg_to_func(image_compress_write_func, &ctx, width, height, 4, input, 0); // XXX quality defaults to 90
+			// Quality defaults to 90
+			e = stbi_write_jpg_to_func(image_compress_write_func, &ctx, width, height, 4, input, 0);
 			break;
 		case MTY_IMAGE_BMP:
 			e = stbi_write_bmp_to_func(image_compress_write_func, &ctx, width, height, 4, input);
@@ -153,30 +132,24 @@ bool MTY_ImageCompress(const void *input, uint32_t width, uint32_t height, MTY_I
 	if (e != 0) {
 		*outputSize = ctx.size;
 		*output = ctx.output;
+		return true;
 
 	} else {
-		if (stbi__g_failure_reason)
-			MTY_Log("%s", stbi__g_failure_reason);
-
 		MTY_Log("'stbi_write_xxx_to_func' failed");
-
-		r = false;
 		MTY_Free(ctx.output);
+		return false;
 	}
-
-	return r;
 }
 
 bool MTY_Compress(const void *input, size_t inputSize, void **output, size_t *outputSize)
 {
 	int32_t out = 0;
-	*output = stbi_zlib_compress((unsigned char *) input, (int32_t) inputSize, &out, 0); // XXX quality defaults to 5
+
+	// Quality defaults to 5
+	*output = stbi_zlib_compress((unsigned char *) input, (int32_t) inputSize, &out, 0);
 	*outputSize = out;
 
 	if (!*output) {
-		if (stbi__g_failure_reason)
-			MTY_Log("%s", stbi__g_failure_reason);
-
 		MTY_Log("'stbi_zlib_compress' failed");
 		return false;
 	}

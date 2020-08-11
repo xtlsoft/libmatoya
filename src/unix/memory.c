@@ -14,6 +14,24 @@
 
 #include "matoya.h"
 
+void *MTY_AllocAligned(size_t size, size_t align)
+{
+	void *mem = NULL;
+	int32_t e = posix_memalign(&mem, align, size);
+
+	if (e != 0)
+		MTY_Fatal("'posix_memalign' failed with error %d", e);
+
+	memset(mem, 0, size);
+
+	return mem;
+}
+
+void MTY_FreeAligned(void *mem)
+{
+	free(mem);
+}
+
 uint16_t MTY_Swap16(uint16_t value)
 {
 	return __builtin_bswap16(value);
@@ -83,39 +101,38 @@ uint64_t MTY_SwapFromBE64(uint64_t value)
 	#endif
 }
 
-char *MTY_WideToMulti(const wchar_t *src, char *dst, size_t len)
+bool MTY_WideToMulti(const wchar_t *src, char *dst, size_t len)
 {
-	if (!dst || len == 0) {
-		len = wcslen(src) + 1;
-		dst = MTY_Alloc(len, 4); // Maximum of 4 bytes per character
-	}
-
 	size_t n = wcstombs(dst, src, len);
 
 	if (n > 0 && n != (size_t) -1) {
-		dst[n] = '\0';
-
+		if (n == len) {
+			MTY_Log("Conversion truncated");
+			dst[len - 1] = L'\0';
+		}
 	} else {
 		MTY_Log("'wcstombs' failed with errno %d", errno);
 		memset(dst, 0, len);
+		return false;
 	}
 
-	return dst;
+	return true;
 }
 
-wchar_t *MTY_MultiToWide(const char *src, wchar_t *dst, uint32_t len)
+bool MTY_MultiToWide(const char *src, wchar_t *dst, uint32_t len)
 {
-	if (!dst || len == 0) {
-		len = (uint32_t) strlen(src) + 1;
-		dst = MTY_Alloc(len, sizeof(wchar_t));
-	}
-
 	size_t n = mbstowcs(dst, src, len);
 
-	if (n != strlen(src)) {
+	if (n > 0 && n != (size_t) -1) {
+		if (n == len) {
+			MTY_Log("Conversion truncated");
+			dst[len - 1] = L'\0';
+		}
+	} else {
 		MTY_Log("'mbstowcs' failed with errno %d", errno);
 		memset(dst, 0, len * sizeof(wchar_t));
+		return false;
 	}
 
-	return dst;
+	return true;
 }

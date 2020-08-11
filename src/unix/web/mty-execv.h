@@ -6,4 +6,4 @@
 
 #pragma once
 
-#define execv(name, argv)
+#define mty_execv(name, argv) (MTY_Log("'mty_execv' is unimplemented"), false)

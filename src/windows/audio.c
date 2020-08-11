@@ -38,8 +38,7 @@ struct MTY_Audio {
 static bool DEFAULT_CHANGED;
 
 
-
-/*** "OVERRIDDEN" IMMNotificationClient ***/
+// "Overridden" IMMNotificationClient
 
 static HRESULT STDMETHODCALLTYPE LIB_IMMNotificationClient_QueryInterface(IMMNotificationClient *This,
 	REFIID riid, void **ppvObject)
@@ -107,8 +106,7 @@ static CONST_VTBL IMMNotificationClientVtbl LIB_IMMNotificationClient = {
 };
 
 
-
-/*** AUDIO ***/
+// Audio
 
 static void audio_device_destroy(MTY_Audio *ctx)
 {

@@ -36,24 +36,41 @@ float MTY_TimeDiff(int64_t begin, int64_t end)
 
 void MTY_Sleep(uint32_t timeout)
 {
+	// There is evidence that CreateWaitableTimer will produce higher resolution
+	// waiting over Sleep
+
 	HANDLE timer = CreateWaitableTimer(NULL, TRUE, NULL);
-	if (timer) {
-		LARGE_INTEGER ft;
-		ft.QuadPart = -10000 * (int32_t) timeout;
-
-		if (SetWaitableTimer(timer, &ft, 0, NULL, NULL, FALSE))
-			WaitForSingleObject(timer, INFINITE);
-
-		CloseHandle(timer);
+	if (!timer) {
+		MTY_Log("'CreateWaitableTimer' faled with error %x", GetLastError());
+		return;
 	}
+
+	LARGE_INTEGER ft;
+	ft.QuadPart = -10000 * (int32_t) timeout;
+
+	if (SetWaitableTimer(timer, &ft, 0, NULL, NULL, FALSE)) {
+		DWORD e = WaitForSingleObject(timer, INFINITE);
+		if (e != WAIT_OBJECT_0)
+			MTY_Log("'WaitForSingleObject' returned %d", e);
+
+	} else {
+		MTY_Log("'SetWaitableTimer' failed with error %x", GetLastError());
+	}
+
+	if (!CloseHandle(timer))
+		MTY_Log("'CloseHandle' failed with error %x", GetLastError());
 }
 
 void MTY_SetTimerResolution(uint32_t res)
 {
-	timeBeginPeriod(res);
+	MMRESULT e = timeBeginPeriod(res);
+	if (e != TIMERR_NOERROR)
+		MTY_Log("'timeBeginPeriod' returned %d", e);
 }
 
 void MTY_RevertTimerResolution(uint32_t res)
 {
-	timeEndPeriod(res);
+	MMRESULT e = timeEndPeriod(res);
+	if (e != TIMERR_NOERROR)
+		MTY_Log("'timeEndPeriod' returned %d", e);
 }

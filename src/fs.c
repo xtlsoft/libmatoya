@@ -6,66 +6,47 @@
 
 #include "matoya.h"
 
+#include <string.h>
 #include <errno.h>
 
-#include "mty-fopen.h"
-
-#define FS_READ_ALLOC 512
+#include "mty-file.h"
 
 bool MTY_FsRead(const char *path, void **data, size_t *size)
 {
-	size_t size_tmp;
-
+	size_t tmp = 0;
 	if (!size)
-		size = &size_tmp;
+		size = &tmp;
 
-	*data = NULL;
-	*size = 0;
-
-	FILE *f = NULL;
-	bool r = fs_open(path, "rb", &f);
-	if (!r)
+	*size = mty_file_size(path);
+	if (*size == 0)
 		return false;
 
-	while (true) {
-		*data = MTY_Realloc(*data, *size + FS_READ_ALLOC + 1, 1);
+	FILE *f = mty_fopen(path, "rb");
+	if (!f)
+		return false;
 
-		size_t n = fread((uint8_t *) *data + *size, 1, FS_READ_ALLOC, f);
-		*size += n;
+	*data = MTY_Alloc(*size + 1, 1);
 
-		((uint8_t *) *data)[*size] = '\0';
-
-		if (n != FS_READ_ALLOC) {
-			int32_t e = ferror(f);
-
-			if (e != 0) {
-				MTY_Log("'fread' failed with ferror %d", e);
-				r = false;
-
-				MTY_Free(*data);
-				*data = NULL;
-				*size = 0;
-			}
-
-			break;
-		}
+	if (fread(*data, 1, *size, f) != *size) {
+		MTY_Log("'fread' failed with ferror %d", ferror(f));
+		MTY_Free(*data);
+		*data = NULL;
+		*size = 0;
 	}
 
 	fclose(f);
 
-	return r;
+	return *data ? true : false;
 }
 
-static bool fs_write(const char *path, const void *data, size_t size, const char *mode)
+bool MTY_FsWrite(const char *path, const void *data, size_t size)
 {
-	FILE *f = NULL;
-	bool r = fs_open(path, mode, &f);
-	if (!r)
-		return r;
+	FILE *f = mty_fopen(path, "wb");
+	if (!f)
+		return false;
 
-	size_t n = fwrite(data, 1, size, f);
-
-	if (n != size) {
+	bool r = true;
+	if (fwrite(data, 1, size, f) != size) {
 		MTY_Log("'fwrite' failed with ferror %d", ferror(f));
 		r = false;
 	}
@@ -75,26 +56,59 @@ static bool fs_write(const char *path, const void *data, size_t size, const char
 	return r;
 }
 
-bool MTY_FsWrite(const char *path, const void *data, size_t size)
+static bool fs_vfprintf(const char *path, const char *mode, const char *fmt, va_list args)
 {
-	return fs_write(path, data, size, "wb");
-}
+	FILE *f = mty_fopen(path, mode);
+	if (!f)
+		return false;
 
-bool MTY_FsAppend(const char *path, const void *data, size_t size)
-{
-	return fs_write(path, data, size, "ab");
-}
-
-void MTY_FsFreeList(MTY_FileDesc **fi, uint32_t len)
-{
-	if (!fi || !*fi)
-		return;
-
-	for (uint32_t x = 0; x < len; x++) {
-		MTY_Free((char *) (*fi)[x].name);
-		MTY_Free((char *) (*fi)[x].path);
+	bool r = true;
+	if (vfprintf(f, fmt, args) < (int32_t) strlen(fmt)) {
+		MTY_Log("'vfprintf' failed with ferror %d", ferror(f));
+		r = false;
 	}
 
-	MTY_Free(*fi);
-	*fi = NULL;
+	fclose(f);
+
+	return r;
+}
+
+bool MTY_FsWriteText(const char *path, const char *fmt, ...)
+{
+	va_list args;
+	va_start(args, fmt);
+
+	bool r = fs_vfprintf(path, "w", fmt, args);
+
+	va_end(args);
+
+	return r;
+}
+
+bool MTY_FsAppendText(const char *path, const char *fmt, ...)
+{
+	va_list args;
+	va_start(args, fmt);
+
+	bool r = fs_vfprintf(path, "a", fmt, args);
+
+	va_end(args);
+
+	return r;
+}
+
+void MTY_FsFreeFileList(MTY_FileList **fl)
+{
+	if (!fl || !*fl)
+		return;
+
+	for (uint32_t x = 0; x < (*fl)->len; x++) {
+		MTY_Free((*fl)->files[x].name);
+		MTY_Free((*fl)->files[x].path);
+	}
+
+	MTY_Free((*fl)->files);
+
+	MTY_Free(*fl);
+	*fl = NULL;
 }

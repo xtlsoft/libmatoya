@@ -70,7 +70,6 @@ function js_to_c(js_str, ptr) {
 }
 
 
-
 // GL
 
 let GL;
@@ -334,7 +333,6 @@ const GL_API = {
 };
 
 
-
 // Matoya audio API
 let AC = {};
 
@@ -396,7 +394,6 @@ const MTY_AUDIO_API = {
 		return 0;
 	},
 };
-
 
 
 // Matoya web API
@@ -512,7 +509,6 @@ const MTY_WEB_API = {
 };
 
 
-
 // WASI API
 
 const WASI_API = {
@@ -586,7 +582,6 @@ const WASI_API = {
 	proc_exit: function () {
 	},
 };
-
 
 
 // Entry

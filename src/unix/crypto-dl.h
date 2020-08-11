@@ -7,7 +7,7 @@
 #pragma once
 
 
-/*** INTERFACE ***/
+// Interface
 
 #if defined(MTY_CRYPTO_EXTERNAL)
 
@@ -56,8 +56,7 @@ STATIC unsigned char *FP(HMAC)(const EVP_MD *evp_md, const void *key, int key_le
 STATIC int FP(RAND_bytes)(unsigned char *buf, int num);
 
 
-
-/*** RUNTIME OPEN ***/
+// Runtime open
 
 #if defined(MTY_CRYPTO_EXTERNAL)
 
@@ -81,10 +80,13 @@ static bool crypto_dl_global_init(void)
 	MTY_GlobalLock(&CRYPTO_DL_LOCK);
 
 	if (!CRYPTO_DL_INIT) {
-		bool r = MTY_SOLoad("libcrypto.so.1.0.0", &CRYPTO_DL_SO);
+		bool r = true;
+		CRYPTO_DL_SO = MTY_SOLoad("libcrypto.so.1.0.0");
 
-		if (!r)
+		if (!CRYPTO_DL_SO) {
+			r = false;
 			goto except;
+		}
 
 		#define LOAD_SYM(so, name) \
 			name = MTY_SOSymbolGet(so, #name); \

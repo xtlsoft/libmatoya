@@ -6,24 +6,20 @@
 
 #include "matoya.h"
 
-#include "mty-proc.h"
+#include "mty-execv.h"
 
-bool MTY_ProcRestart(int32_t argc, const char **argv)
+bool MTY_ProcRestart(int32_t argc, char * const *argv)
 {
-	bool free_argvn = false;
-	const char **argvn = argv;
-
 	if (argc > 0) {
-		free_argvn = true;
-		argvn = MTY_Alloc(argc + 1, sizeof(const char *));
+		char **argvn = MTY_Alloc(argc + 1, sizeof(char *));
 		for (int32_t x = 0; x < argc; x++)
 			argvn[x] = argv[x];
+
+		bool r = mty_execv(MTY_ProcName(), argvn);
+		MTY_Free(argvn);
+
+		return r;
 	}
 
-	bool r = proc_execv(MTY_ProcName(), argvn);
-
-	if (free_argvn)
-		MTY_Free((void *) argvn);
-
-	return r;
+	return mty_execv(MTY_ProcName(), argv);
 }

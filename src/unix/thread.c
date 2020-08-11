@@ -12,10 +12,10 @@
 #include <time.h>
 
 #include "mty-pthread.h"
+#include "mty-gettime.h"
 
 
-
-/*** THREAD ***/
+// Thread
 
 struct MTY_Thread {
 	pthread_t thread;
@@ -88,8 +88,7 @@ void *MTY_ThreadDestroy(MTY_Thread **thread)
 }
 
 
-
-/*** MUTEX ***/
+// Mutex
 
 struct MTY_Mutex {
 	pthread_mutex_t mutex;
@@ -148,8 +147,7 @@ void MTY_MutexDestroy(MTY_Mutex **mutex)
 }
 
 
-
-/*** COND ***/
+// Cond
 
 struct MTY_Cond {
 	pthread_cond_t cond;
@@ -168,18 +166,15 @@ bool MTY_CondWait(MTY_Cond *ctx, MTY_Mutex *mutex, int32_t timeout)
 {
 	// Use pthread_cond_timedwait
 	if (timeout >= 0) {
-		struct timespec ts;
-		int32_t e = clock_gettime(CLOCK_REALTIME, &ts);
-		if (e != 0)
-			MTY_Fatal("'clock_gettime' failed with errno %d", errno);
+		struct timespec ts = {0};
+		mty_get_time(&ts);
 
 		ts.tv_sec += timeout / 1000;
 		ts.tv_nsec += (timeout % 1000) * 1000 * 1000;
 		ts.tv_sec += ts.tv_nsec / 1000000000;
 		ts.tv_nsec %= 1000000000;
 
-		e = pthread_cond_timedwait(&ctx->cond, &mutex->mutex, &ts);
-
+		int32_t e = pthread_cond_timedwait(&ctx->cond, &mutex->mutex, &ts);
 		if (e == ETIMEDOUT) {
 			return false;
 
@@ -227,8 +222,7 @@ void MTY_CondDestroy(MTY_Cond **cond)
 }
 
 
-
-/*** ATOMIC ***/
+// Atomic
 
 // XXX Android will complain about the 64-bit atomics on 32-bit platforms,
 // there is probably a performance penalty but not critical enough to care

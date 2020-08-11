@@ -28,24 +28,24 @@ bool MTY_RequestCreate(const char *url, const char *method, const char *headers,
 	MTY_Request *ctx = MTY_Alloc(1, sizeof(MTY_Request));
 	bool r = true;
 
-	WCHAR url_w[REQUEST_MAX_URL];
-	_snwprintf_s(url_w, REQUEST_MAX_URL, _TRUNCATE, L"%hs", url);
+	wchar_t url_w[REQUEST_MAX_URL];
+	MTY_MultiToWide(url, url_w, REQUEST_MAX_URL);
 
-	WCHAR method_w[16];
-	_snwprintf_s(method_w, 16, _TRUNCATE, L"%hs", method);
+	wchar_t method_w[16];
+	MTY_MultiToWide(method, method_w, 16);
 
-	WCHAR headers_w[REQUEST_MAX_HEADERS] = {0};
+	wchar_t headers_w[REQUEST_MAX_HEADERS] = {0};
 	if (headers)
-		_snwprintf_s(headers_w, REQUEST_MAX_HEADERS, _TRUNCATE, L"%hs", headers);
+		MTY_MultiToWide(headers, headers_w, REQUEST_MAX_HEADERS);
 
-	WCHAR host_w[REQUEST_MAX_URL];
-	WCHAR path_w[REQUEST_MAX_URL];
+	wchar_t host_w[REQUEST_MAX_URL];
+	wchar_t path_w[REQUEST_MAX_URL];
 	URL_COMPONENTS info = {0};
 	info.dwStructSize = sizeof(URL_COMPONENTS);
 	info.lpszHostName = host_w;
-	info.dwHostNameLength = sizeof(host_w) / sizeof(WCHAR);
+	info.dwHostNameLength = sizeof(host_w) / sizeof(wchar_t);
 	info.lpszUrlPath = path_w;
-	info.dwUrlPathLength = sizeof(path_w) / sizeof(WCHAR);
+	info.dwUrlPathLength = sizeof(path_w) / sizeof(wchar_t);
 	if (!WinHttpCrackUrl(url_w, (DWORD) wcslen(url_w), ICU_ESCAPE, &info)) {
 		MTY_Log("'WinHttpCrackUrl' failed with error %x", GetLastError());
 		r = false;
@@ -126,7 +126,7 @@ bool MTY_RequestGetStatusCode(MTY_Request *ctx, uint32_t *statusCode)
 {
 	*statusCode = 0;
 
-	WCHAR code_w[16] = {0};
+	wchar_t code_w[16] = {0};
 	DWORD buf_len = sizeof(code_w);
 	if (!WinHttpQueryHeaders(ctx->req, WINHTTP_QUERY_STATUS_CODE, NULL, code_w, &buf_len, NULL))
 		return false;
@@ -172,13 +172,13 @@ bool MTY_RequestGetBody(MTY_Request *ctx, void **body, size_t *size)
 
 bool MTY_RequestGetHeader(MTY_Request *ctx, const char *key, char *value, size_t size)
 {
-	WCHAR key_w[64];
-	_snwprintf_s(key_w, 64, _TRUNCATE, L"%hs", key);
+	wchar_t key_w[64];
+	MTY_MultiToWide(key, key_w, 64);
 
-	WCHAR value_w[128];
+	wchar_t value_w[128];
 	DWORD buf_len = sizeof(value_w);
 
-	buf_len = 128 * sizeof(WCHAR);
+	buf_len = 128 * sizeof(wchar_t);
 	if (!WinHttpQueryHeaders(ctx->req, WINHTTP_QUERY_CUSTOM, key_w, value_w, &buf_len, NULL))
 		return false;
 

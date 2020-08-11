@@ -12,20 +12,32 @@ struct VS_OUTPUT {
 cbuffer VS_CONSTANT_BUFFER : register(b0) {
 	float width;
 	float height;
-	float constrain_w;
 	float constrain_h;
 	uint filter;
 	uint effect;
 	uint format;
-	uint __pad[1];
+	uint __pad[2];
 };
 
 SamplerState ss {
 };
 
-Texture2D frame0 : register(t0);
-Texture2D frame1 : register(t1);
-Texture2D frame2 : register(t2);
+Texture2D tex0 : register(t0);
+Texture2D tex1 : register(t1);
+Texture2D tex2 : register(t2);
+
+float4 yuv_to_rgba(float y, float u, float v)
+{
+	y = (y - 0.0625) * 1.164;
+	u = u - 0.5;
+	v = v - 0.5;
+
+	float r = y + 1.793 * v;
+	float g = y - 0.213 * u - 0.533 * v;
+	float b = y + 2.112 * u;
+
+	return float4(r, g, b, 1.0);
+}
 
 float4 main(VS_OUTPUT input) : SV_TARGET
 {
@@ -33,35 +45,19 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 
 	// NV12
 	if (format == 2) {
-		float y = frame0.Sample(ss, input.texcoord).r;
-		float u = frame1.Sample(ss, input.texcoord).r;
-		float v = frame1.Sample(ss, input.texcoord).g;
+		float y = tex0.Sample(ss, input.texcoord).r;
+		float u = tex1.Sample(ss, input.texcoord).r;
+		float v = tex1.Sample(ss, input.texcoord).g;
 
-		y = (y - 0.0625) * 1.164;
-		u = u - 0.5;
-		v = v - 0.5;
-
-		float r = y + 1.793 * v;
-		float g = y - 0.213 * u - 0.533 * v;
-		float b = y + 2.112 * u;
-
-		return float4(r, g, b, 1.0);
+		return yuv_to_rgba(y, u, v);
 
 	// I420 or I444
 	} else if (format == 3 || format == 4) {
-		float y = frame0.Sample(ss, input.texcoord).r;
-		float u = frame1.Sample(ss, input.texcoord).r;
-		float v = frame2.Sample(ss, input.texcoord).r;
+		float y = tex0.Sample(ss, input.texcoord).r;
+		float u = tex1.Sample(ss, input.texcoord).r;
+		float v = tex2.Sample(ss, input.texcoord).r;
 
-		y = (y - 0.0625) * 1.164;
-		u = u - 0.5;
-		v = v - 0.5;
-
-		float r = y + 1.793 * v;
-		float g = y - 0.213 * u - 0.533 * v;
-		float b = y + 2.112 * u;
-
-		return float4(r, g, b, 1.0);
+		return yuv_to_rgba(y, u, v);
 	}
 
 	// RGBA + filter + effects
@@ -79,11 +75,11 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 		}
 		p = c + dist;
 
-		rgba = frame0.Sample(ss, p / res);
+		rgba = tex0.Sample(ss, p / res);
 
 	// No filter
 	} else {
-		rgba = frame0.Sample(ss, input.texcoord);
+		rgba = tex0.Sample(ss, input.texcoord);
 	}
 
 	// Scanlines
@@ -96,9 +92,9 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 			float2 p = input.texcoord * res;
 
 			p.y -= 1.0;
-			float4 top = frame0.Sample(ss, p / res);
+			float4 top = tex0.Sample(ss, p / res);
 			p.y += 2.0;
-			float4 bot = frame0.Sample(ss, p / res);
+			float4 bot = tex0.Sample(ss, p / res);
 
 			rgba = float4(
 				((top.r + bot.r) / 2.0 + rgba.r * 4.0) / 5.0,

@@ -6,4 +6,15 @@
 
 #pragma once
 
+#include <stdbool.h>
+#include <errno.h>
+
 #include <unistd.h>
+
+static bool mty_execv(const char *name, char * const *argv)
+{
+	execv(name, argv);
+	MTY_Log("'execv' failed with errno %d", errno);
+
+	return false;
+}

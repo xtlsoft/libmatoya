@@ -20,7 +20,7 @@ static void mty_rwlock_create(mty_rwlock *rwlock)
 		MTY_Fatal("'pthread_rwlockattr_init' failed with error %d", e);
 
 	// Wrapper for RWLOCK_PREFER_WRITER
-	rwlockattr_set(&attr);
+	mty_rwlockattr_set(&attr);
 
 	e = pthread_rwlock_init(rwlock, &attr);
 	if (e != 0)
@@ -36,7 +36,6 @@ static void mty_rwlock_reader(mty_rwlock *rwlock)
 	int32_t e = pthread_rwlock_rdlock(rwlock);
 	if (e != 0)
 		MTY_Fatal("'pthread_rwlock_rdlock' failed with error %d", e);
-
 }
 
 static void mty_rwlock_writer(mty_rwlock *rwlock)

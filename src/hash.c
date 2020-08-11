@@ -36,7 +36,7 @@ void MTY_HashCreate(uint32_t numBuckets, MTY_Hash **hash)
 	ctx->buckets = MTY_Alloc(ctx->num_buckets, sizeof(struct hash_bucket));
 }
 
-static bool hash_next_key(MTY_Hash *ctx, uint64_t *iter, const char **key)
+bool MTY_HashNextKey(MTY_Hash *ctx, uint64_t *iter, const char **key)
 {
 	*key = NULL;
 
@@ -66,15 +66,10 @@ static bool hash_next_key(MTY_Hash *ctx, uint64_t *iter, const char **key)
 	return *key ? true : false;
 }
 
-bool MTY_HashNextKey(MTY_Hash *ctx, uint64_t *iter, const char **key)
-{
-	return hash_next_key(ctx, iter, key);
-}
-
 bool MTY_HashNextKeyInt(MTY_Hash *ctx, uint64_t *iter, int64_t *key)
 {
 	const char *key_str;
-	bool r = hash_next_key(ctx, iter, &key_str);
+	bool r = MTY_HashNextKey(ctx, iter, &key_str);
 
 	r = r && key_str[0] == '#';
 
@@ -112,7 +107,7 @@ void MTY_HashDestroy(MTY_Hash **hash, void (*freeFunc)(void *value))
 	hash = NULL;
 }
 
-static void *hash_get(MTY_Hash *ctx, const char *key, bool remove)
+static void *hash_get(MTY_Hash *ctx, const char *key, bool pop)
 {
 	struct hash_bucket *b = &ctx->buckets[MTY_CryptoDJB2(key) % ctx->num_buckets];
 
@@ -122,7 +117,7 @@ static void *hash_get(MTY_Hash *ctx, const char *key, bool remove)
 		if (n->key && !strcmp(key, n->key)) {
 			const void *r = n->val;
 
-			if (remove) {
+			if (pop) {
 				MTY_Free(n->key);
 				n->key = NULL;
 				n->val = NULL;
@@ -161,7 +156,7 @@ void *MTY_HashPopInt(MTY_Hash *ctx, int64_t key)
 	return hash_get(ctx, key_str, true);
 }
 
-static void *hash_set(MTY_Hash *ctx, const char *key, const void *value)
+void *MTY_HashSet(MTY_Hash *ctx, const char *key, const void *value)
 {
 	struct hash_bucket *b = &ctx->buckets[MTY_CryptoDJB2(key) % ctx->num_buckets];
 	struct hash_node *n = NULL;
@@ -191,15 +186,10 @@ static void *hash_set(MTY_Hash *ctx, const char *key, const void *value)
 	return NULL;
 }
 
-void *MTY_HashSet(MTY_Hash *ctx, const char *key, const void *value)
-{
-	return hash_set(ctx, key, value);
-}
-
 void *MTY_HashSetInt(MTY_Hash *ctx, int64_t key, const void *value)
 {
 	char key_str[32];
 	snprintf(key_str, 32, "#%" PRIx64, key);
 
-	return hash_set(ctx, key_str, value);
+	return MTY_HashSet(ctx, key_str, value);
 }

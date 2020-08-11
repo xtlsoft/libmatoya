@@ -69,7 +69,7 @@ bool MTY_JSONWriteFile(const char *path, const MTY_JSON *json)
 
 MTY_JSON *MTY_JSONDuplicate(const MTY_JSON *json)
 {
-	return !json ? (MTY_JSON *) cJSON_CreateNull() : (MTY_JSON *) cJSON_Duplicate((cJSON *) json, true);
+	return (MTY_JSON *) (!json ? cJSON_CreateNull() : cJSON_Duplicate((cJSON *) json, true));
 }
 
 uint32_t MTY_JSONLength(const MTY_JSON *json)
@@ -138,7 +138,9 @@ bool MTY_JSONToBool(const MTY_JSON *json, bool *value)
 	if (!cj || !cJSON_IsBool(cj))
 		return false;
 
-	*value = cj->valueint;
+	// cJSON stores bool information as part of the type
+	// XXX DO NOT be tempted to use item->valueint!
+	*value = cj->type & cJSON_True;
 
 	return true;
 }

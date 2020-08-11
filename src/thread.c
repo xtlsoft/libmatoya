@@ -67,8 +67,7 @@ void MTY_SyncDestroy(MTY_Sync **sync)
 }
 
 
-
-/*** THREAD POOL ***/
+// ThreadPool
 
 struct thread_info {
 	MTY_ThreadState status;
@@ -142,6 +141,9 @@ uint32_t MTY_ThreadPoolStart(MTY_ThreadPool *ctx, void (*func)(void *opaque), co
 		MTY_MutexUnlock(ti->m);
 	}
 
+	if (index == 0)
+		MTY_Log("Could not find available index");
+
 	return index;
 }
 
@@ -200,10 +202,7 @@ void MTY_ThreadPoolDestroy(MTY_ThreadPool **pool, void (*detach)(void *opaque))
 }
 
 
-
-/*** RWLOCK ***/
-
-#define RWLOCK_MAX UINT8_MAX
+// RWLock
 
 struct MTY_RWLock {
 	mty_rwlock rwlock;
@@ -213,23 +212,19 @@ struct MTY_RWLock {
 
 static MTY_TLS struct rwlock_state {
 	uint16_t taken;
-	bool init;
 	bool read;
 	bool write;
-} RWLOCK_STATE[RWLOCK_MAX];
+} RWLOCK_STATE[UINT8_MAX];
+
+static MTY_Atomic32 RWLOCK_INIT[UINT8_MAX];
 
 static uint8_t rwlock_index(void)
 {
-	for (uint8_t x = 0; x < RWLOCK_MAX; x++) {
-		struct rwlock_state *rw = &RWLOCK_STATE[x];
-
-		if (!rw->init) {
-			rw->init = true;
+	for (uint8_t x = 0; x < UINT8_MAX; x++)
+		if (MTY_Atomic32CAS(&RWLOCK_INIT[x], 0, 1))
 			return x;
-		}
-	}
 
-	MTY_Fatal("'rwlock_index' could not find a free rwlock slot, maximum is %u per thread", RWLOCK_MAX);
+	MTY_Fatal("Could not find a free rwlock slot, maximum is %u", UINT8_MAX);
 
 	return 0;
 }
@@ -304,14 +299,14 @@ void MTY_RWLockDestroy(MTY_RWLock **rwlock)
 
 	mty_rwlock_destroy(&ctx->rwlock);
 	memset(&RWLOCK_STATE[ctx->index], 0, sizeof(struct rwlock_state));
+	MTY_Atomic32Set(&RWLOCK_INIT[ctx->index], 0);
 
 	MTY_Free(ctx);
 	*rwlock = NULL;
 }
 
 
-
-/*** GLOBAL LOCKS ***/
+// Global locks
 
 static MTY_Atomic32 THREAD_GINDEX = {1};
 static mty_rwlock THREAD_GLOCKS[UINT8_MAX];

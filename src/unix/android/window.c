@@ -69,7 +69,6 @@ JNIEXPORT void JNICALL Java_group_matoya_merton_MainSurface_mty_1surface_1unlock
 
 
 
-
 int main(int argc, char **argv);
 
 JNIEXPORT void JNICALL Java_group_matoya_merton_MainActivity_mty_1global_1init(JNIEnv *env, jobject instance)
@@ -90,7 +89,6 @@ JNIEXPORT void JNICALL Java_group_matoya_merton_AppThread_mty_1start(JNIEnv *env
 
 	MTY_Free(name);
 }
-
 
 
 struct MTY_Window {
@@ -253,7 +251,7 @@ MTY_Texture *MTY_WindowGetBackBuffer(MTY_Window *ctx)
 {
 	if (GFX.ready && GFX.init) {
 		if (!ctx->back_buffer) {
-			gfx_gl_rtv_refresh(&ctx->rtv, GL_RGBA, GFX.w, GFX.h);
+			gfx_gl_rtv_refresh(&ctx->rtv, GL_RGBA8, GL_RGBA, GFX.w, GFX.h);
 			ctx->back_buffer = ctx->rtv.texture;
 		}
 

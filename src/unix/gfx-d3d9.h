@@ -6,17 +6,8 @@
 
 #pragma once
 
-#include <stdbool.h>
-#include <stdio.h>
-#include <errno.h>
+struct gfx_d3d9;
 
-static bool fs_open(const char *path, const char *mode, FILE **file)
-{
-	*file = fopen(path, mode);
-	if (!*file) {
-		MTY_Log("'fopen' failed with errno %d", errno);
-		return false;
-	}
-
-	return true;
-}
+#define gfx_d3d9_create(mty_device, gfx) (MTY_Log("MTY_GFX_D3D9 is unimplemented"), false)
+#define gfx_d3d9_render(ctx, device, image, desc, dest) false
+#define gfx_d3d9_destroy(gfx)

@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <wchar.h>
 
 void *MTY_Alloc(size_t nelem, size_t elsize)
 {
@@ -48,4 +49,30 @@ void *MTY_Strdup(const void *str)
 void MTY_Free(void *mem)
 {
 	free(mem);
+}
+
+char *MTY_WideToMultiD(const wchar_t *src)
+{
+	if (!src)
+		return NULL;
+
+	size_t len = wcslen(src) + 1;
+	char *dst = MTY_Alloc(len, sizeof(wchar_t));
+
+	MTY_WideToMulti(src, dst, len);
+
+	return dst;
+}
+
+wchar_t *MTY_MultiToWideD(const char *src)
+{
+	if (!src)
+		return NULL;
+
+	uint32_t len = (uint32_t) strlen(src) + 1;
+	wchar_t *dst = MTY_Alloc(len, sizeof(wchar_t));
+
+	MTY_MultiToWide(src, dst, len);
+
+	return dst;
 }

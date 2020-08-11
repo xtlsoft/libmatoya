@@ -11,8 +11,7 @@
 #include <windows.h>
 
 
-
-/*** THREAD ***/
+// Thread
 
 struct MTY_Thread {
 	HANDLE thread;
@@ -86,8 +85,7 @@ void *MTY_ThreadDestroy(MTY_Thread **thread)
 }
 
 
-
-/*** MUTEX ***/
+// Mutex
 
 struct MTY_Mutex {
 	CRITICAL_SECTION mutex;
@@ -129,8 +127,7 @@ void MTY_MutexDestroy(MTY_Mutex **mutex)
 }
 
 
-
-/*** COND ***/
+// Cond
 
 struct MTY_Cond {
 	CONDITION_VARIABLE cond;
@@ -186,8 +183,7 @@ void MTY_CondDestroy(MTY_Cond **cond)
 }
 
 
-
-/*** ATOMIC ***/
+// Atomic
 
 void MTY_Atomic32Set(MTY_Atomic32 *atomic, int32_t value)
 {

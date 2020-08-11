@@ -6,8 +6,8 @@
 
 #include "matoya.h"
 
-#include <string.h>
 #include <limits.h>
+#include <string.h>
 
 static const char CRYPTO_HEX[16] = {
 	'0', '1', '2', '3', '4', '5', '6', '7',
@@ -32,8 +32,10 @@ void MTY_CryptoBytesToHex(const void *bytes, size_t size, char *hex, size_t hexS
 
 	size_t offset = 0;
 	for (size_t x = 0; x < size; x++, offset += 2) {
-		if (offset + 2 > hexSize)
+		if (offset + 2 >= hexSize) {
+			MTY_Log("'hex' not large enough, truncated");
 			break;
+		}
 
 		uint8_t byte = ((uint8_t *) bytes)[x];
 		hex[offset] = CRYPTO_HEX[byte >> 4];
@@ -53,8 +55,10 @@ void MTY_CryptoHexToBytes(const char *hex, void *bytes, size_t size)
 
 		size_t index = x / 2;
 
-		if (index >= size)
+		if (index >= size) {
+			MTY_Log("'bytes' not large enough, truncated");
 			break;
+		}
 
 		uint8_t val = CRYPTO_HEX_REVERSE[b];
 
@@ -76,27 +80,36 @@ void MTY_CryptoBytesToBase64(const void *bytes, size_t size, char *b64, size_t b
 	memset(b64, 0, b64Size);
 
 	for (size_t x = 0, p = 0; x < size; x += 3) {
-		if (p + 3 > b64Size)
+		if (p + 3 >= b64Size) {
+			MTY_Log("'b64' not large enough, truncated");
 			break;
+		}
 
 		uint8_t b = buf[x];
-		uint8_t shift = (b >> 2) & 0x3f;
-		b64[p++] = CRYPTO_B64[shift];
+		uint8_t shift = (b >> 2) & 0x3F;
 		uint8_t rem = (b << 4) & 0x30;
+
+		b64[p++] = CRYPTO_B64[shift];
 
 		if (x + 1 < size) {
 			b = buf[x + 1];
-			shift = (b >> 4) & 0x0f;
+			shift = (b >> 4) & 0x0F;
 			b64[p++] = CRYPTO_B64[rem | shift];
-			rem = (b << 2) & 0x3c;
-		} else b64[p + 2] = '=';
+			rem = (b << 2) & 0x3C;
+
+		} else {
+			b64[p + 2] = '=';
+		}
 
 		if (x + 2 < size) {
 			b = buf[x + 2];
 			shift = (b >> 6) & 0x03;
 			b64[p++] = CRYPTO_B64[rem | shift];
-			rem = (b << 0) & 0x3f;
-		} else b64[p + 1] = '=';
+			rem = (b << 0) & 0x3F;
+
+		} else {
+			b64[p + 1] = '=';
+		}
 
 		b64[p++] = CRYPTO_B64[rem];
 	}
@@ -147,13 +160,15 @@ bool MTY_CryptoHashFile(MTY_Algorithm algo, const char *path, const void *key, s
 	return r;
 }
 
-int32_t MTY_CryptoRandomInt(int32_t minVal, int32_t maxVal)
+uint32_t MTY_CryptoRandomUInt(uint32_t minVal, uint32_t maxVal)
 {
-	if (minVal == maxVal)
+	if (minVal >= maxVal) {
+		MTY_Log("'minVal' can not be >= maxVal");
 		return minVal;
+	}
 
-	int32_t val = 0;
-	MTY_CryptoRandom(&val, sizeof(int32_t));
+	uint32_t val = 0;
+	MTY_CryptoRandom(&val, sizeof(uint32_t));
 
-	return val % (minVal - maxVal) + minVal;
+	return val % (maxVal - minVal) + minVal;
 }

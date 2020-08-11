@@ -6,33 +6,33 @@
 
 #include "matoya.h"
 
-#include <time.h>
+#include "mty-tls.h"
+#include "mty-timestamp.h"
+#include "mty-sleepms.h"
 
-#include <unistd.h>
+static MTY_TLS bool TIME_FREQ_INIT;
+static MTY_TLS float TIME_FREQUENCY;
 
 int64_t MTY_Timestamp(void)
 {
-	struct timespec ts = {0};
-	clock_gettime(CLOCK_MONOTONIC, &ts);
-
-	uint64_t r = ts.tv_sec * 1000 * 1000;
-	r += ts.tv_nsec / 1000;
-
-	return r;
+	return mty_timestamp();
 }
 
 float MTY_TimeDiff(int64_t begin, int64_t end)
 {
-	return (float) (end - begin) / 1000.0f;
+	if (!TIME_FREQ_INIT) {
+		TIME_FREQUENCY = mty_frequency();
+		TIME_FREQ_INIT = true;
+	}
+
+	return (float) (end - begin) * TIME_FREQUENCY;
 }
 
 void MTY_Sleep(uint32_t timeout)
 {
-	struct timespec ts = {0};
-	ts.tv_sec = timeout / 1000;
-	ts.tv_nsec = (timeout % 1000) * 1000 * 1000;
-
-	nanosleep(&ts, NULL);
+	// When targeting the web, emscripten will treat nanosleep
+	// as a blocking busy wait on the main thread (NOT what we want)
+	mty_sleep_ms(timeout);
 }
 
 void MTY_SetTimerResolution(uint32_t res)

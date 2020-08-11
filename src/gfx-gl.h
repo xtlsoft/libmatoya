@@ -11,7 +11,7 @@
 #include "GL/glcorearb30.h"
 
 struct gfx_gl_rtv {
-	GLint format;
+	GLenum format;
 	GLuint texture;
 	GLuint fb;
 	uint32_t w;
@@ -25,7 +25,7 @@ bool gfx_gl_render(struct gfx_gl *ctx, const void *image, const MTY_RenderDesc *
 void gfx_gl_destroy(struct gfx_gl **gfx);
 
 void gfx_gl_rtv_destroy(struct gfx_gl_rtv *rtv);
-void gfx_gl_rtv_refresh(struct gfx_gl_rtv *rtv, GLint format, uint32_t w, uint32_t h);
+void gfx_gl_rtv_refresh(struct gfx_gl_rtv *rtv, GLint internal, GLenum format, uint32_t w, uint32_t h);
 void gfx_gl_rtv_blit_to_back_buffer(struct gfx_gl_rtv *rtv);
 
 void gfx_gl_finish(void);

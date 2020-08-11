@@ -21,6 +21,7 @@ static int sort_compare(const void *a, const void *b)
 
 	int32_t r = element_a->compare(element_a->orig, element_b->orig);
 
+	// If zero is returned from original comare, use the memory address as the tie breaker
 	return r != 0 ? r : (int) ((uint8_t *) element_a->orig - (uint8_t *) element_b->orig);
 }
 
@@ -30,7 +31,7 @@ void MTY_Sort(void *base, size_t nElements, size_t size, int32_t (*compare)(cons
 	uint8_t *tmp = MTY_Alloc(nElements, size);
 	memcpy(tmp, base, nElements * size);
 
-	// Wrap the base array elements in a struct containing the original index and compare function
+	// Wrap the base array elements in a struct now with 'orig' memory addresses in ascending order
 	struct element *wrapped = MTY_Alloc(nElements, sizeof(struct element));
 
 	for (size_t x = 0; x < nElements; x++) {
@@ -38,7 +39,7 @@ void MTY_Sort(void *base, size_t nElements, size_t size, int32_t (*compare)(cons
 		wrapped[x].orig = tmp + x * size;
 	}
 
-	// Perform qsort using the original compare function, falling back to index comparison
+	// Perform qsort using the original compare function, falling back to memory address comparison
 	qsort(wrapped, nElements, sizeof(struct element), sort_compare);
 
 	// Copy the reordered elements back to the base array
