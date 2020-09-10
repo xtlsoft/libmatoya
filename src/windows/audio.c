@@ -163,10 +163,10 @@ static HRESULT audio_device_create(MTY_Audio *ctx)
 	return e;
 }
 
-bool MTY_AudioCreate(MTY_Audio **audio, uint32_t sample_rate)
+MTY_Audio *MTY_AudioCreate(uint32_t sampleRate)
 {
-	MTY_Audio *ctx = *audio = MTY_Alloc(1, sizeof(MTY_Audio));
-	ctx->sample_rate = sample_rate;
+	MTY_Audio *ctx = MTY_Alloc(1, sizeof(MTY_Audio));
+	ctx->sample_rate = sampleRate;
 
 	ctx->coinit = true;
 	CoInitialize(NULL);
@@ -186,9 +186,9 @@ bool MTY_AudioCreate(MTY_Audio **audio, uint32_t sample_rate)
 	except:
 
 	if (e != S_OK)
-		MTY_AudioDestroy(audio);
+		MTY_AudioDestroy(&ctx);
 
-	return e == S_OK;
+	return ctx;
 }
 
 uint32_t MTY_AudioGetQueuedFrames(MTY_Audio *ctx)

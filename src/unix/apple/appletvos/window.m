@@ -10,10 +10,10 @@ struct MTY_Window {
 	bool dummy;
 };
 
-bool MTY_WindowCreate(const char *title, MTY_WindowMsgFunc msg_func, const void *opaque,
-	uint32_t width, uint32_t height, bool fullscreen, MTY_Window **window)
+MTY_Window *MTY_WindowCreate(const char *title, MTY_MsgFunc msg_func, const void *opaque,
+	uint32_t width, uint32_t height, bool fullscreen)
 {
-	return true;
+	return NULL;
 }
 
 void MTY_AppRun(MTY_AppFunc func, const void *opaque)
@@ -22,6 +22,11 @@ void MTY_AppRun(MTY_AppFunc func, const void *opaque)
 
 void MTY_WindowSetTitle(MTY_Window *ctx, const char *title, const char *subtitle)
 {
+}
+
+bool MTY_WindowGetSize(MTY_Window *ctx, uint32_t *width, uint32_t *height)
+{
+	return true;
 }
 
 void MTY_WindowPoll(MTY_Window *ctx)
@@ -47,7 +52,7 @@ void MTY_WindowSetFullscreen(MTY_Window *ctx)
 {
 }
 
-void MTY_WindowSetWindowed(MTY_Window *ctx, uint32_t width, uint32_t height)
+void MTY_WindowSetSize(MTY_Window *ctx, uint32_t width, uint32_t height)
 {
 }
 

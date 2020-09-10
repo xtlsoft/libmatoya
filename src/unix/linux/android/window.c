@@ -73,7 +73,7 @@ int main(int argc, char **argv);
 
 JNIEXPORT void JNICALL Java_group_matoya_merton_MainActivity_mty_1global_1init(JNIEnv *env, jobject instance)
 {
-	MTY_MutexCreate(&GFX.mutex);
+	GFX.mutex = MTY_MutexCreate();
 }
 
 JNIEXPORT void JNICALL Java_group_matoya_merton_AppThread_mty_1start(JNIEnv *env, jobject instance, jstring jname)
@@ -92,7 +92,7 @@ JNIEXPORT void JNICALL Java_group_matoya_merton_AppThread_mty_1start(JNIEnv *env
 
 
 struct MTY_Window {
-	MTY_WindowMsgFunc msg_func;
+	MTY_MsgFunc msg_func;
 	const void *opaque;
 
 	GLuint back_buffer;
@@ -158,7 +158,7 @@ static bool window_check(MTY_Window *ctx)
 
 	eglMakeCurrent(GFX.display, GFX.surface, GFX.surface, GFX.context);
 
-	MTY_RendererCreate(&ctx->renderer);
+	ctx->renderer = MTY_RendererCreate();
 
 	GFX.init = true;
 
@@ -170,14 +170,14 @@ static bool window_check(MTY_Window *ctx)
 	return r;
 }
 
-bool MTY_WindowCreate(const char *title, MTY_WindowMsgFunc msg_func, const void *opaque,
-	uint32_t width, uint32_t height, bool fullscreen, MTY_Window **window)
+MTY_Window *MTY_WindowCreate(const char *title, MTY_MsgFunc msg_func, const void *opaque,
+	uint32_t width, uint32_t height, bool fullscreen)
 {
-	MTY_Window *ctx = *window = MTY_Alloc(1, sizeof(MTY_Window));
+	MTY_Window *ctx = MTY_Alloc(1, sizeof(MTY_Window));
 	ctx->msg_func = msg_func;
 	ctx->opaque = opaque;
 
-	return true;
+	return ctx;
 }
 
 void MTY_AppRun(MTY_AppFunc func, const void *opaque)
@@ -187,6 +187,14 @@ void MTY_AppRun(MTY_AppFunc func, const void *opaque)
 
 void MTY_WindowSetTitle(MTY_Window *ctx, const char *title, const char *subtitle)
 {
+}
+
+bool MTY_WindowGetSize(MTY_Window *ctx, uint32_t *width, uint32_t *height)
+{
+	*width = GFX.w;
+	*height = GFX.h;
+
+	return true;
 }
 
 void MTY_WindowPoll(MTY_Window *ctx)
@@ -212,7 +220,7 @@ void MTY_WindowSetFullscreen(MTY_Window *ctx)
 {
 }
 
-void MTY_WindowSetWindowed(MTY_Window *ctx, uint32_t width, uint32_t height)
+void MTY_WindowSetSize(MTY_Window *ctx, uint32_t width, uint32_t height)
 {
 }
 

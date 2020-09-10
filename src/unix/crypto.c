@@ -43,21 +43,21 @@ void MTY_CryptoHash(MTY_Algorithm algo, const void *input, size_t inputSize, con
 
 	switch (algo) {
 		case MTY_ALGORITHM_SHA1:
-			crypto_hash(EVP_sha1(), SHA1, input, inputSize, key, keySize, output, outputSize, MTY_CRYPTO_SHA1_SIZE);
+			crypto_hash(EVP_sha1(), SHA1, input, inputSize, key, keySize, output, outputSize, MTY_SHA1_SIZE);
 			break;
 		case MTY_ALGORITHM_SHA1_HEX: {
-			uint8_t bytes[MTY_CRYPTO_SHA1_SIZE];
-			crypto_hash(EVP_sha1(), SHA1, input, inputSize, key, keySize, bytes, sizeof(bytes), MTY_CRYPTO_SHA1_SIZE);
-			MTY_CryptoBytesToHex(bytes, sizeof(bytes), output, outputSize);
+			uint8_t bytes[MTY_SHA1_SIZE];
+			crypto_hash(EVP_sha1(), SHA1, input, inputSize, key, keySize, bytes, sizeof(bytes), MTY_SHA1_SIZE);
+			MTY_BytesToHex(bytes, sizeof(bytes), output, outputSize);
 			break;
 		}
 		case MTY_ALGORITHM_SHA256:
-			crypto_hash(EVP_sha256(), SHA256, input, inputSize, key, keySize, output, outputSize, MTY_CRYPTO_SHA256_SIZE);
+			crypto_hash(EVP_sha256(), SHA256, input, inputSize, key, keySize, output, outputSize, MTY_SHA256_SIZE);
 			break;
 		case MTY_ALGORITHM_SHA256_HEX: {
-			uint8_t bytes[MTY_CRYPTO_SHA256_SIZE];
-			crypto_hash(EVP_sha256(), SHA256, input, inputSize, key, keySize, bytes, sizeof(bytes), MTY_CRYPTO_SHA256_SIZE);
-			MTY_CryptoBytesToHex(bytes, sizeof(bytes), output, outputSize);
+			uint8_t bytes[MTY_SHA256_SIZE];
+			crypto_hash(EVP_sha256(), SHA256, input, inputSize, key, keySize, bytes, sizeof(bytes), MTY_SHA256_SIZE);
+			MTY_BytesToHex(bytes, sizeof(bytes), output, outputSize);
 			break;
 		}
 	}
@@ -66,7 +66,7 @@ void MTY_CryptoHash(MTY_Algorithm algo, const void *input, size_t inputSize, con
 
 // Random
 
-void MTY_CryptoRandom(void *output, size_t size)
+void MTY_RandomBytes(void *output, size_t size)
 {
 	if (!crypto_dl_global_init())
 		return;

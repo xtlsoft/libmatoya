@@ -19,13 +19,13 @@ static void audio_error(AAudioStream *stream, void *userData, aaudio_result_t er
 	MTY_Log("'AAudioStream' error %d", error);
 }
 
-bool MTY_AudioCreate(MTY_Audio **audio, uint32_t sample_rate)
+MTY_Audio *MTY_AudioCreate(uint32_t sampleRate)
 {
-	MTY_Audio *ctx = *audio = MTY_Alloc(1, sizeof(MTY_Audio));
+	MTY_Audio *ctx = MTY_Alloc(1, sizeof(MTY_Audio));
 
 	AAudio_createStreamBuilder(&ctx->builder);
 	AAudioStreamBuilder_setDeviceId(ctx->builder, AAUDIO_UNSPECIFIED);
-	AAudioStreamBuilder_setSampleRate(ctx->builder, 48000);
+	AAudioStreamBuilder_setSampleRate(ctx->builder, sampleRate);
 	AAudioStreamBuilder_setChannelCount(ctx->builder, 2);
 	AAudioStreamBuilder_setFormat(ctx->builder, AAUDIO_FORMAT_PCM_I16);
 	AAudioStreamBuilder_setPerformanceMode(ctx->builder, AAUDIO_PERFORMANCE_MODE_LOW_LATENCY);
@@ -33,7 +33,7 @@ bool MTY_AudioCreate(MTY_Audio **audio, uint32_t sample_rate)
 
 	AAudioStreamBuilder_openStream(ctx->builder, &ctx->stream);
 
-	return true;
+	return ctx;
 }
 
 uint32_t MTY_AudioGetQueuedFrames(MTY_Audio *ctx)

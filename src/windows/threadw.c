@@ -33,27 +33,37 @@ static DWORD WINAPI thread_func(LPVOID *lpParameter)
 	return 0;
 }
 
-void MTY_ThreadCreate(void *(*func)(void *opaque), const void *opaque, MTY_Thread **thread)
+static MTY_Thread *thread_create(void *(*func)(void *opaque), const void *opaque, bool detach)
 {
 	MTY_Thread *ctx = MTY_Alloc(1, sizeof(MTY_Thread));
 	ctx->func = func;
 	ctx->opaque = (void *) opaque;
-	ctx->detach = !thread;
-
-	if (thread)
-		*thread = ctx;
+	ctx->detach = detach;
 
 	ctx->thread = CreateThread(NULL, 0, thread_func, ctx, 0, NULL);
 
 	if (!ctx->thread)
-		MTY_Fatal("'CreateThread' failed with error %x", GetLastError());
+		MTY_Fatal("'CreateThread' failed with error 0x%X", GetLastError());
 
 	if (ctx->detach) {
 		if (!CloseHandle(ctx->thread))
-			MTY_Fatal("'CloseHandle' failed with error %x", GetLastError());
+			MTY_Fatal("'CloseHandle' failed with error 0x%X", GetLastError());
 
 		ctx->thread = NULL;
+		ctx = NULL;
 	}
+
+	return ctx;
+}
+
+MTY_Thread *MTY_ThreadCreate(void *(*func)(void *opaque), const void *opaque)
+{
+	return thread_create(func, opaque, false);
+}
+
+void MTY_ThreadDetach(void *(*func)(void *opaque), const void *opaque)
+{
+	thread_create(func, opaque, true);
 }
 
 int64_t MTY_ThreadIDGet(MTY_Thread *ctx)
@@ -70,10 +80,10 @@ void *MTY_ThreadDestroy(MTY_Thread **thread)
 
 	if (ctx->thread) {
 		if (WaitForSingleObject(ctx->thread, INFINITE) == WAIT_FAILED)
-			MTY_Fatal("'WaitForSingleObject' failed with error %x", GetLastError());
+			MTY_Fatal("'WaitForSingleObject' failed with error 0x%X", GetLastError());
 
 		if (!CloseHandle(ctx->thread))
-			MTY_Fatal("'CloseHandle' failed with error %x", GetLastError());
+			MTY_Fatal("'CloseHandle' failed with error 0x%X", GetLastError());
 	}
 
 	void *ret = ctx->ret;
@@ -91,11 +101,13 @@ struct MTY_Mutex {
 	CRITICAL_SECTION mutex;
 };
 
-void MTY_MutexCreate(MTY_Mutex **mutex)
+MTY_Mutex *MTY_MutexCreate(void)
 {
-	MTY_Mutex *ctx = *mutex = MTY_Alloc(1, sizeof(MTY_Mutex));
+	MTY_Mutex *ctx = MTY_Alloc(1, sizeof(MTY_Mutex));
 
 	InitializeCriticalSection(&ctx->mutex);
+
+	return ctx;
 }
 
 void MTY_MutexLock(MTY_Mutex *ctx)
@@ -133,11 +145,13 @@ struct MTY_Cond {
 	CONDITION_VARIABLE cond;
 };
 
-void MTY_CondCreate(MTY_Cond **cond)
+MTY_Cond *MTY_CondCreate(void)
 {
-	MTY_Cond *ctx = *cond = MTY_Alloc(1, sizeof(MTY_Cond));
+	MTY_Cond *ctx = MTY_Alloc(1, sizeof(MTY_Cond));
 
 	InitializeConditionVariable(&ctx->cond);
+
+	return ctx;
 }
 
 bool MTY_CondWait(MTY_Cond *ctx, MTY_Mutex *mutex, int32_t timeout)
@@ -154,7 +168,7 @@ bool MTY_CondWait(MTY_Cond *ctx, MTY_Mutex *mutex, int32_t timeout)
 			r = false;
 
 		} else {
-			MTY_Fatal("'SleepConditionVariableCS' failed with error %x", e);
+			MTY_Fatal("'SleepConditionVariableCS' failed with error 0x%X", e);
 		}
 	}
 

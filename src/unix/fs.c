@@ -28,14 +28,13 @@
 static MTY_TLS char FS_CWD[MTY_PATH_MAX];
 static MTY_TLS char FS_HOME[MTY_PATH_MAX];
 static MTY_TLS char FS_PATH[MTY_PATH_MAX];
-static MTY_TLS char FS_PROGRAM[MTY_PATH_MAX];
+static MTY_TLS char FS_EXECUTABLE[MTY_PATH_MAX];
+static MTY_TLS char FS_PROGRAMS[MTY_PATH_MAX];
 static MTY_TLS char FS_FILE_NAME[MTY_PATH_MAX];
 
-bool MTY_FsDelete(const char *path)
+bool MTY_DeleteFile(const char *path)
 {
-	int32_t e = remove(path);
-
-	if (e == -1) {
+	if (remove(path) != 0) {
 		MTY_Log("'remove' failed with errno %d", errno);
 		return false;
 	}
@@ -43,12 +42,12 @@ bool MTY_FsDelete(const char *path)
 	return true;
 }
 
-bool MTY_FsExists(const char *path)
+bool MTY_FileExists(const char *path)
 {
 	return access(path, F_OK) != -1;
 }
 
-bool MTY_FsMkdir(const char *path)
+bool MTY_Mkdir(const char *path)
 {
 	char *tmp = MTY_Strdup(path);
 	size_t len = strlen(tmp);
@@ -75,7 +74,7 @@ bool MTY_FsMkdir(const char *path)
 	return true;
 }
 
-const char *MTY_FsPath(const char *dir, const char *file)
+const char *MTY_Path(const char *dir, const char *file)
 {
 	char *safe_dir = MTY_Strdup(dir);
 	char *safe_file = MTY_Strdup(file);
@@ -88,21 +87,31 @@ const char *MTY_FsPath(const char *dir, const char *file)
 	return FS_PATH;
 }
 
-bool MTY_FsCopy(const char *src, const char *dst)
+bool MTY_CopyFile(const char *src, const char *dst)
 {
-	void *data = NULL;
+	bool r = false;
 	size_t size = 0;
-	bool r = MTY_FsRead(src, &data, &size);
+	void *data = MTY_ReadFile(src, &size);
 
-	if (r) {
-		r = MTY_FsWrite(dst, data, size);
+	if (data) {
+		r = MTY_WriteFile(dst, data, size);
 		MTY_Free(data);
 	}
 
 	return r;
 }
 
-const char *MTY_FsGetDir(MTY_FsDir dir)
+bool MTY_MoveFile(const char *src, const char *dst)
+{
+	if (rename(src, dst) != 0) {
+		MTY_Log("'rename' failed with errno %d", errno);
+		return false;
+	}
+
+	return true;
+}
+
+const char *MTY_GetDir(MTY_Dir dir)
 {
 	switch (dir) {
 		case MTY_DIR_CWD: {
@@ -131,48 +140,57 @@ const char *MTY_FsGetDir(MTY_FsDir dir)
 
 			break;
 		}
-		case MTY_DIR_PROGRAM: {
-			if (mty_proc_name(FS_PROGRAM, MTY_PATH_MAX)) {
-				char *name = strrchr(FS_PROGRAM, '/');
+		case MTY_DIR_EXECUTABLE: {
+			if (mty_proc_name(FS_EXECUTABLE, MTY_PATH_MAX)) {
+				char *name = strrchr(FS_EXECUTABLE, '/');
 
 				if (name)
 					name[0] = '\0';
 
-				return FS_PROGRAM;
+				return FS_EXECUTABLE;
 			}
 
 			break;
+		}
+		case MTY_DIR_PROGRAMS: {
+			snprintf(FS_PROGRAMS, MTY_PATH_MAX, "/user/bin");
+			return FS_PROGRAMS;
 		}
 	}
 
 	return ".";
 }
 
-bool MTY_FsLockCreate(const char *path, MTY_LockFile **lock)
+MTY_LockFile *MTY_LockFileCreate(const char *path, MTY_FileMode mode)
 {
-	int32_t f = open(path, O_RDWR | O_CREAT, S_IRWXU);
+	int32_t open_flags = 0;
+	int32_t flock_flags = LOCK_SH;
+
+	if (mode == MTY_FILE_MODE_WRITE) {
+		open_flags = O_CREAT;
+		flock_flags = LOCK_EX;
+	}
+
+	int32_t f = open(path, O_RDWR | open_flags, S_IRWXU);
 
 	if (f != -1) {
-		if (flock(f, LOCK_EX | LOCK_NB) == 0) {
-			*lock = (MTY_LockFile *) (intptr_t) f;
+		if (flock(f, flock_flags | LOCK_NB) == 0) {
+			return (MTY_LockFile *) (intptr_t) f;
 
 		} else {
 			MTY_Log("'flock' failed with errno %d", errno);
 
 			if (close(f) != 0)
 				MTY_Log("'close' failed with errno %d", errno);
-
-			return false;
 		}
 	} else {
 		MTY_Log("'open' failed with errno %d", errno);
-		return false;
 	}
 
-	return true;
+	return NULL;
 }
 
-void MTY_FsLockDestroy(MTY_LockFile **lock)
+void MTY_LockFileDestroy(MTY_LockFile **lock)
 {
 	if (!lock || !*lock)
 		return;
@@ -189,7 +207,7 @@ void MTY_FsLockDestroy(MTY_LockFile **lock)
 	*lock = NULL;
 }
 
-const char *MTY_FsName(const char *path, bool extension)
+const char *MTY_GetFileName(const char *path, bool extension)
 {
 	const char *name = strrchr(path, '/');
 	name = name ? name + 1 : path;
@@ -227,7 +245,7 @@ static int32_t fs_file_compare(const void *p1, const void *p2)
 	}
 }
 
-MTY_FileList *MTY_FsFileList(const char *path, const char *filter)
+MTY_FileList *MTY_GetFileList(const char *path, const char *filter)
 {
 	MTY_FileList *fl = MTY_Alloc(1, sizeof(MTY_FileList));
 	char *pathd = MTY_Strdup(path);
@@ -250,7 +268,7 @@ MTY_FileList *MTY_FsFileList(const char *path, const char *filter)
 
 			fl->files[fl->len].dir = is_dir;
 			fl->files[fl->len].name = MTY_Strdup(name);
-			fl->files[fl->len].path = MTY_Strdup(MTY_FsPath(pathd, name));
+			fl->files[fl->len].path = MTY_Strdup(MTY_Path(pathd, name));
 			fl->len++;
 		}
 

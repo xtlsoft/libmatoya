@@ -40,20 +40,19 @@ struct image_write {
 	size_t size;
 };
 
-bool MTY_ImageDecompress(const void *input, size_t size, void **output, uint32_t *width, uint32_t *height)
+void *MTY_DecompressImage(const void *input, size_t size, uint32_t *width, uint32_t *height)
 {
 	int32_t channels = 0;
-	*output = stbi_load_from_memory(input, (int32_t) size, (int32_t *) width, (int32_t *) height, &channels, 4);
+	void *output = stbi_load_from_memory(input, (int32_t) size, (int32_t *) width, (int32_t *) height, &channels, 4);
 
-	if (!*output) {
+	if (!output) {
 		if (stbi__g_failure_reason)
 			MTY_Log("%s", stbi__g_failure_reason);
 
 		MTY_Log("'stbi_load_from_memory' failed");
-		return false;
 	}
 
-	return true;
+	return output;
 }
 
 static void image_center_crop(uint32_t w, uint32_t h, uint32_t target_w, uint32_t target_h,
@@ -77,7 +76,7 @@ static void image_center_crop(uint32_t w, uint32_t h, uint32_t target_w, uint32_
 	*crop_h = (target_h > 0 && h > target_h) ? lrint((float) (h - target_h) / m) : 0;
 }
 
-void *MTY_ImageCrop(const void *image, uint32_t cropWidth, uint32_t cropHeight, uint32_t *width, uint32_t *height)
+void *MTY_CropImage(const void *image, uint32_t cropWidth, uint32_t cropHeight, uint32_t *width, uint32_t *height)
 {
 	uint32_t crop_width = 0;
 	uint32_t crop_height = 0;
@@ -111,7 +110,7 @@ static void image_compress_write_func(void *context, void *data, int size)
 	memcpy(ctx->output, data, ctx->size);
 }
 
-bool MTY_ImageCompress(const void *input, uint32_t width, uint32_t height, MTY_Image type, void **output, size_t *outputSize)
+void *MTY_CompressImage(MTY_Image type, const void *input, uint32_t width, uint32_t height, size_t *outputSize)
 {
 	struct image_write ctx = {0};
 	int32_t e = 0;
@@ -131,45 +130,42 @@ bool MTY_ImageCompress(const void *input, uint32_t width, uint32_t height, MTY_I
 
 	if (e != 0) {
 		*outputSize = ctx.size;
-		*output = ctx.output;
-		return true;
 
 	} else {
 		MTY_Log("'stbi_write_xxx_to_func' failed");
 		MTY_Free(ctx.output);
-		return false;
+		ctx.output = NULL;
 	}
+
+	return ctx.output;
 }
 
-bool MTY_Compress(const void *input, size_t inputSize, void **output, size_t *outputSize)
+void *MTY_Compress(const void *input, size_t inputSize, size_t *outputSize)
 {
 	int32_t out = 0;
 
 	// Quality defaults to 5
-	*output = stbi_zlib_compress((unsigned char *) input, (int32_t) inputSize, &out, 0);
+	void *output = stbi_zlib_compress((uint8_t *) input, (int32_t) inputSize, &out, 0);
 	*outputSize = out;
 
-	if (!*output) {
+	if (!output)
 		MTY_Log("'stbi_zlib_compress' failed");
-		return false;
-	}
 
-	return true;
+	return output;
 }
 
-bool MTY_Decompress(const void *input, size_t inputSize, void **output, size_t *outputSize)
+void *MTY_Decompress(const void *input, size_t inputSize, size_t *outputSize)
 {
 	int32_t out = 0;
-	*output = stbi_zlib_decode_malloc(input, (int32_t) inputSize, &out);
+	void *output = stbi_zlib_decode_malloc(input, (int32_t) inputSize, &out);
 	*outputSize = out;
 
-	if (!*output) {
+	if (!output) {
 		if (stbi__g_failure_reason)
 			MTY_Log("%s", stbi__g_failure_reason);
 
 		MTY_Log("'stbi_zlib_decode_malloc' failed");
-		return false;
 	}
 
-	return true;
+	return output;
 }

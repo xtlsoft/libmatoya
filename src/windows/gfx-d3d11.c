@@ -47,6 +47,8 @@ struct gfx_d3d11 {
 	ID3D11InputLayout *il;
 	ID3D11SamplerState *ss_nearest;
 	ID3D11SamplerState *ss_linear;
+	ID3D11RasterizerState *rs;
+	ID3D11DepthStencilState *dss;
 };
 
 bool gfx_d3d11_create(ID3D11Device *device, struct gfx_d3d11 **gfx)
@@ -55,13 +57,13 @@ bool gfx_d3d11_create(ID3D11Device *device, struct gfx_d3d11 **gfx)
 
 	HRESULT e = ID3D11Device_CreateVertexShader(device, vs, sizeof(vs), NULL, &ctx->vs);
 	if (e != S_OK) {
-		MTY_Log("'ID3D11Device_CreateVertexShader' failed with HRESULT %x", e);
+		MTY_Log("'ID3D11Device_CreateVertexShader' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
 	e = ID3D11Device_CreatePixelShader(device, ps, sizeof(ps), NULL, &ctx->ps);
 	if (e != S_OK) {
-		MTY_Log("'ID3D11Device_CreatePixelShader' failed with HRESULT %x", e);
+		MTY_Log("'ID3D11Device_CreatePixelShader' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
@@ -84,7 +86,7 @@ bool gfx_d3d11_create(ID3D11Device *device, struct gfx_d3d11 **gfx)
 	srd.pSysMem = vertex_data;
 	e = ID3D11Device_CreateBuffer(device, &bd, &srd, &ctx->vb);
 	if (e != S_OK) {
-		MTY_Log("'ID3D11Device_CreateBuffer' failed with HRESULT %x", e);
+		MTY_Log("'ID3D11Device_CreateBuffer' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
@@ -101,7 +103,7 @@ bool gfx_d3d11_create(ID3D11Device *device, struct gfx_d3d11 **gfx)
 	isrd.pSysMem = index_data;
 	e = ID3D11Device_CreateBuffer(device, &ibd, &isrd, &ctx->ib);
 	if (e != S_OK) {
-		MTY_Log("'ID3D11Device_CreateBuffer' failed with HRESULT %x", e);
+		MTY_Log("'ID3D11Device_CreateBuffer' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
@@ -112,13 +114,13 @@ bool gfx_d3d11_create(ID3D11Device *device, struct gfx_d3d11 **gfx)
 	psbd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 	e = ID3D11Device_CreateBuffer(device, &psbd, NULL, &ctx->psb);
 	if (e != S_OK) {
-		MTY_Log("'ID3D11Device_CreateBuffer' failed with HRESULT %x", e);
+		MTY_Log("'ID3D11Device_CreateBuffer' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
 	e = ID3D11Buffer_QueryInterface(ctx->psb, &IID_ID3D11Resource, &ctx->psbres);
 	if (e != S_OK) {
-		MTY_Log("'ID3D11Buffer_QueryInterface' failed with HRESULT %x", e);
+		MTY_Log("'ID3D11Buffer_QueryInterface' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
@@ -129,7 +131,7 @@ bool gfx_d3d11_create(ID3D11Device *device, struct gfx_d3d11 **gfx)
 
 	e = ID3D11Device_CreateInputLayout(device, ied, 2, vs, sizeof(vs), &ctx->il);
 	if (e != S_OK) {
-		MTY_Log("'ID3D11Device_CreateInputLayout' failed with HRESULT %x", e);
+		MTY_Log("'ID3D11Device_CreateInputLayout' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
@@ -140,14 +142,30 @@ bool gfx_d3d11_create(ID3D11Device *device, struct gfx_d3d11 **gfx)
 	sdesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
 	e = ID3D11Device_CreateSamplerState(device, &sdesc, &ctx->ss_nearest);
 	if (e != S_OK) {
-		MTY_Log("'ID3D11Device_CreateSamplerState' failed with HRESULT %x", e);
+		MTY_Log("'ID3D11Device_CreateSamplerState' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
 	sdesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
 	e = ID3D11Device_CreateSamplerState(device, &sdesc, &ctx->ss_linear);
 	if (e != S_OK) {
-		MTY_Log("'ID3D11Device_CreateSamplerState' failed with HRESULT %x", e);
+		MTY_Log("'ID3D11Device_CreateSamplerState' failed with HRESULT 0x%X", e);
+		goto except;
+	}
+
+	D3D11_RASTERIZER_DESC rdesc = {0};
+	rdesc.FillMode = D3D11_FILL_SOLID;
+	rdesc.CullMode = D3D11_CULL_NONE;
+	e = ID3D11Device_CreateRasterizerState(device, &rdesc, &ctx->rs);
+	if (e != S_OK) {
+		MTY_Log("'ID3D11Device_CreateRasterizerState' failed with HRESULT 0x%X", e);
+		goto except;
+	}
+
+	D3D11_DEPTH_STENCIL_DESC dssdesc = {0};
+	e = ID3D11Device_CreateDepthStencilState(device, &dssdesc, &ctx->dss);
+	if (e != S_OK) {
+		MTY_Log("'ID3D11Device_CreateDepthStencilState' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
@@ -196,13 +214,13 @@ static HRESULT gfx_d3d11_refresh_resource(struct gfx_d3d11_res *res, ID3D11Devic
 
 		e = ID3D11Device_CreateTexture2D(device, &desc, NULL, &res->texture);
 		if (e != S_OK) {
-			MTY_Log("'ID3D11Device_CreateTexture2D' failed with HRESULT %x", e);
+			MTY_Log("'ID3D11Device_CreateTexture2D' failed with HRESULT 0x%X", e);
 			goto except;
 		}
 
 		e = ID3D11Texture2D_QueryInterface(res->texture, &IID_ID3D11Resource, &res->resource);
 		if (e != S_OK) {
-			MTY_Log("'ID3D11Texture2D_QueryInterface' failed with HRESULT %x", e);
+			MTY_Log("'ID3D11Texture2D_QueryInterface' failed with HRESULT 0x%X", e);
 			goto except;
 		}
 
@@ -213,7 +231,7 @@ static HRESULT gfx_d3d11_refresh_resource(struct gfx_d3d11_res *res, ID3D11Devic
 
 		e = ID3D11Device_CreateShaderResourceView(device, res->resource, &srvd, &res->srv);
 		if (e != S_OK) {
-			MTY_Log("'ID3D11Device_CreateShaderResourceView' failed with HRESULT %x", e);
+			MTY_Log("'ID3D11Device_CreateShaderResourceView' failed with HRESULT 0x%X", e);
 			goto except;
 		}
 
@@ -236,7 +254,7 @@ static HRESULT gfx_d3d11_crop_copy(ID3D11DeviceContext *context, ID3D11Resource 
 	D3D11_MAPPED_SUBRESOURCE res;
 	HRESULT e = ID3D11DeviceContext_Map(context, texture, 0, D3D11_MAP_WRITE_DISCARD, 0, &res);
 	if (e != S_OK) {
-		MTY_Log("'ID3D11DeviceContext_Map' failed with HRESULT %x", e);
+		MTY_Log("'ID3D11DeviceContext_Map' failed with HRESULT 0x%X", e);
 		return e;
 	}
 
@@ -258,6 +276,15 @@ static HRESULT gfx_d3d11_reload_textures(struct gfx_d3d11 *ctx, ID3D11Device *de
 			if (e != S_OK) return e;
 
 			e = gfx_d3d11_crop_copy(context, ctx->staging[0].resource, image, desc->cropWidth, desc->cropHeight, desc->imageWidth, 4);
+			if (e != S_OK) return e;
+			break;
+		}
+		case MTY_COLOR_FORMAT_RGB565: {
+			// RGBA
+			HRESULT e = gfx_d3d11_refresh_resource(&ctx->staging[0], device, DXGI_FORMAT_B5G6R5_UNORM, desc->cropWidth, desc->cropHeight);
+			if (e != S_OK) return e;
+
+			e = gfx_d3d11_crop_copy(context, ctx->staging[0].resource, image, desc->cropWidth, desc->cropHeight, desc->imageWidth, 2);
 			if (e != S_OK) return e;
 			break;
 		}
@@ -339,13 +366,13 @@ bool gfx_d3d11_render(struct gfx_d3d11 *ctx, ID3D11Device *device, ID3D11DeviceC
 	if (dest) {
 		e = ID3D11Texture2D_QueryInterface(dest, &IID_ID3D11Resource, &rtvresource);
 		if (e != S_OK) {
-			MTY_Log("'ID3D11Texture2D_QueryInterface' failed with HRESULT %x", e);
+			MTY_Log("'ID3D11Texture2D_QueryInterface' failed with HRESULT 0x%X", e);
 			goto except;
 		}
 
 		e = ID3D11Device_CreateRenderTargetView(device, rtvresource, NULL, &rtv);
 		if (e != S_OK) {
-			MTY_Log("'ID3D11Device_CreateRenderTargetView' failed with HRESULT %x", e);
+			MTY_Log("'ID3D11Device_CreateRenderTargetView' failed with HRESULT 0x%X", e);
 			goto except;
 		}
 
@@ -364,6 +391,9 @@ bool gfx_d3d11_render(struct gfx_d3d11 *ctx, ID3D11Device *device, ID3D11DeviceC
 	ID3D11DeviceContext_IASetIndexBuffer(context, ctx->ib, DXGI_FORMAT_R32_UINT, 0);
 	ID3D11DeviceContext_IASetInputLayout(context, ctx->il);
 	ID3D11DeviceContext_IASetPrimitiveTopology(context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	ID3D11DeviceContext_OMSetBlendState(context, NULL, NULL, 0xFFFFFFFF);
+	ID3D11DeviceContext_OMSetDepthStencilState(context, ctx->dss, 0);
+	ID3D11DeviceContext_RSSetState(context, ctx->rs);
 
 	// Pixel shader
 	ID3D11DeviceContext_PSSetShader(context, ctx->ps, NULL, 0);
@@ -384,7 +414,7 @@ bool gfx_d3d11_render(struct gfx_d3d11 *ctx, ID3D11Device *device, ID3D11DeviceC
 	D3D11_MAPPED_SUBRESOURCE res = {0};
 	e = ID3D11DeviceContext_Map(context, ctx->psbres, 0, D3D11_MAP_WRITE_DISCARD, 0, &res);
 	if (e != S_OK) {
-		MTY_Log("'ID3D11DeviceContext_Map' failed with HRESULT %x", e);
+		MTY_Log("'ID3D11DeviceContext_Map' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
@@ -415,6 +445,12 @@ void gfx_d3d11_destroy(struct gfx_d3d11 **gfx)
 
 	for (uint8_t x = 0; x < NUM_STAGING; x++)
 		gfx_d3d11_destroy_resource(&ctx->staging[x]);
+
+	if (ctx->rs)
+		ID3D11RasterizerState_Release(ctx->rs);
+
+	if (ctx->dss)
+		ID3D11DepthStencilState_Release(ctx->dss);
 
 	if (ctx->ss_linear)
 		ID3D11SamplerState_Release(ctx->ss_linear);

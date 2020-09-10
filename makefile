@@ -1,6 +1,7 @@
-OS = windows
+TARGET = windows
 ARCH = %%Platform%%
 NAME = matoya
+PREFIX = mty
 
 .SUFFIXES : .ps4 .vs4 .ps3 .vs3 .vert .frag
 
@@ -44,7 +45,6 @@ OBJS = $(OBJS) \
 	src\windows\fsw.obj \
 	src\windows\memoryw.obj \
 	src\windows\procw.obj \
-	src\windows\request.obj \
 	src\windows\threadw.obj \
 	src\windows\time.obj \
 	src\windows\window.obj \
@@ -107,40 +107,35 @@ TEST_LIBS = \
 	winmm.lib \
 	bcrypt.lib \
 	shlwapi.lib \
-	winhttp.lib \
 	ws2_32.lib \
 	opengl32.lib
 
 !IFDEF DEBUG
-FLAGS = $(FLAGS) /Oy- /Ob0 /Zi
+FLAGS = $(FLAGS) /Ob0 /Zi
 TEST_FLAGS = $(TEST_FLAGS) /debug
 !ELSE
 FLAGS = $(FLAGS) /O2 /Gy /GS- /Gw
-!IFDEF LTO
-FLAGS = $(FLAGS) /GL
-LIB_FLAGS = $(LIB_FLAGS) /LTCG
-!ENDIF
 !ENDIF
 
 CFLAGS = $(INCLUDES) $(DEFS) $(FLAGS)
 
 all: clean-build clear $(SHADERS) $(OBJS)
-	mkdir bin\$(OS)\$(ARCH)
-	lib /out:bin\$(OS)\$(ARCH)\$(NAME).lib $(LIB_FLAGS) *.obj
+	mkdir bin\$(TARGET)\$(ARCH)
+	lib /out:bin\$(TARGET)\$(ARCH)\$(NAME).lib $(LIB_FLAGS) *.obj
 
 test: all src\test.obj
-	link /out:mty-test.exe $(TEST_FLAGS) *.obj $(TEST_LIBS)
-	mty-test.exe
+	link /out:$(PREFIX)-test.exe $(TEST_FLAGS) *.obj $(TEST_LIBS)
+	$(PREFIX)-test.exe
+
+clean: clean-build
+	@-del /q $(SHADERS) 2>nul
 
 clean-build:
 	@-rmdir /s /q bin 2>nul
 	@-del /q *.obj 2>nul
 	@-del /q *.lib 2>nul
 	@-del /q *.pdb 2>nul
-	@-del /q mty-test.exe 2>nul
-
-clean: clean-build
-	@-del /q $(SHADERS) 2>nul
+	@-del /q $(PREFIX)-test.exe 2>nul
 
 clear:
 	@cls

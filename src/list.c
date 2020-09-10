@@ -11,9 +11,9 @@ struct MTY_List {
 	MTY_ListNode *last;
 };
 
-void MTY_ListCreate(MTY_List **list)
+MTY_List *MTY_ListCreate(void)
 {
-	*list = MTY_Alloc(1, sizeof(MTY_List));
+	return MTY_Alloc(1, sizeof(MTY_List));
 }
 
 MTY_ListNode *MTY_ListFirst(MTY_List *ctx)
@@ -21,10 +21,10 @@ MTY_ListNode *MTY_ListFirst(MTY_List *ctx)
 	return ctx->first;
 }
 
-void MTY_ListAppend(MTY_List *ctx, void *value)
+void MTY_ListAppend(MTY_List *ctx, const void *value)
 {
 	MTY_ListNode *node = MTY_Alloc(1, sizeof(MTY_ListNode));
-	node->value = value;
+	node->value = (void *) value;
 
 	if (!ctx->first) {
 		ctx->first = ctx->last = node;

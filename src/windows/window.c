@@ -18,15 +18,18 @@
 
 #include "mty-tls.h"
 
-#define WINDOW_CLASS_NAME L"LIBWindowClass"
+#define WINDOW_CLASS_NAME L"MTY_Window"
 #define WINDOW_SWAP_CHAIN_FLAGS DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT
 
 struct MTY_Window {
 	HWND hwnd;
 	ATOM class;
 	HINSTANCE instance;
-	MTY_WindowMsgFunc msg_func;
+	MTY_MsgFunc msg_func;
 	const void *opaque;
+
+	RECT clip;
+	bool relative;
 
 	uint32_t width;
 	uint32_t height;
@@ -41,12 +44,26 @@ struct MTY_Window {
 
 static HRESULT (WINAPI *_GetDpiForMonitor)(HMONITOR hmonitor, MONITOR_DPI_TYPE dpiType, UINT *dpiX, UINT *dpiY);
 
+static void window_show_cursor(bool show)
+{
+	CURSORINFO ci = {0};
+	ci.cbSize = sizeof(CURSORINFO);
+	GetCursorInfo(&ci);
+
+	if (show && !(ci.flags & CURSOR_SHOWING)) {
+		ShowCursor(TRUE);
+
+	} else if (!show && (ci.flags & CURSOR_SHOWING)) {
+		ShowCursor(FALSE);
+	}
+}
+
 static LRESULT CALLBACK window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
-	MTY_WindowMsg wmsg = {0};
+	MTY_Window *ctx = (MTY_Window *) GetWindowLongPtr(hwnd, 0);
+
+	MTY_Msg wmsg = {0};
 	char drop_name[MTY_PATH_MAX];
-	bool custom_return = false;
-	LRESULT r = 0;
 
 	switch (msg) {
 		case WM_NCCREATE:
@@ -58,12 +75,16 @@ static LRESULT CALLBACK window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
 		case WM_DESTROY:
 			PostQuitMessage(0);
 			break;
+		case WM_SETFOCUS:
+			if (ctx && ctx->relative)
+				ClipCursor(&ctx->clip);
+			break;
 		case WM_KEYUP:
 		case WM_KEYDOWN:
 		case WM_SYSKEYUP:
 		case WM_SYSKEYDOWN:
-			if (GetCursor())
-				SetCursor(NULL);
+			if (ctx && !ctx->relative)
+				window_show_cursor(false);
 
 			wmsg.type = MTY_WINDOW_MSG_KEYBOARD;
 			wmsg.keyboard.pressed = !(lparam >> 31);
@@ -72,8 +93,8 @@ static LRESULT CALLBACK window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
 				wmsg.keyboard.scancode |= 0x0100;
 			break;
 		case WM_MOUSEMOVE:
-			if (!GetCursor())
-				SetCursor(LoadCursor(NULL, IDC_ARROW));
+			if (ctx && !ctx->relative)
+				window_show_cursor(true);
 
 			wmsg.type = MTY_WINDOW_MSG_MOUSE_MOTION;
 			wmsg.mouseMotion.relative = false;
@@ -111,17 +132,29 @@ static LRESULT CALLBACK window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
 
 				MTY_WideToMulti(namew, drop_name, MTY_PATH_MAX);
 				wmsg.drop.name = drop_name;
+				wmsg.drop.data = MTY_ReadFile(drop_name, &wmsg.drop.size);
 
-				if (MTY_FsRead(drop_name, (void **) &wmsg.drop.data, &wmsg.drop.size))
+				if (wmsg.drop.data)
 					wmsg.type = MTY_WINDOW_MSG_DROP;
+			}
+			break;
+		case WM_INPUT:
+			wmsg.type = MTY_WINDOW_MSG_MOUSE_MOTION;
+			wmsg.mouseMotion.relative = true;
+
+			RAWINPUT raw = {0};
+			UINT size = sizeof(RAWINPUT);
+			GetRawInputData((HRAWINPUT) lparam, RID_INPUT, &raw, &size, sizeof(RAWINPUTHEADER));
+
+			if (raw.header.dwType == RIM_TYPEMOUSE) {
+				wmsg.mouseMotion.x = raw.data.mouse.lLastX;
+				wmsg.mouseMotion.y = raw.data.mouse.lLastY;
 			}
 			break;
 	}
 
 	if (wmsg.type != MTY_WINDOW_MSG_NONE) {
-		MTY_Window *ctx = (MTY_Window *) GetWindowLongPtr(hwnd, 0);
-
-		if (ctx)
+		if (ctx && (wmsg.type != MTY_WINDOW_MSG_MOUSE_MOTION || wmsg.mouseMotion.relative == ctx->relative))
 			ctx->msg_func(&wmsg, (void *) ctx->opaque);
 
 		if (wmsg.type == MTY_WINDOW_MSG_DROP)
@@ -130,7 +163,7 @@ static LRESULT CALLBACK window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
 		return 0;
 	}
 
-	return custom_return ? r : DefWindowProc(hwnd, msg, wparam, lparam);
+	return DefWindowProc(hwnd, msg, wparam, lparam);
 }
 
 static void window_calc_client_area(uint32_t *width, uint32_t *height)
@@ -144,12 +177,12 @@ static void window_calc_client_area(uint32_t *width, uint32_t *height)
 	}
 }
 
-bool MTY_WindowCreate(const char *title, MTY_WindowMsgFunc msg_func, const void *opaque,
-	uint32_t width, uint32_t height, bool fullscreen, MTY_Window **window)
+MTY_Window *MTY_WindowCreate(const char *title, MTY_MsgFunc msg_func, const void *opaque,
+	uint32_t width, uint32_t height, bool fullscreen)
 {
 	bool r = true;
 
-	MTY_Window *ctx = *window = MTY_Alloc(1, sizeof(MTY_Window));
+	MTY_Window *ctx = MTY_Alloc(1, sizeof(MTY_Window));
 	ctx->msg_func = msg_func;
 	ctx->opaque = opaque;
 
@@ -210,6 +243,12 @@ bool MTY_WindowCreate(const char *title, MTY_WindowMsgFunc msg_func, const void 
 
 	DragAcceptFiles(ctx->hwnd, TRUE);
 
+	RAWINPUTDEVICE rid = {0};
+	rid.usUsagePage = 0x01;
+	rid.usUsage = 0x02;
+	rid.hwndTarget = ctx->hwnd;
+	RegisterRawInputDevices(&rid, 1, sizeof(RAWINPUTDEVICE));
+
 	_GetDpiForMonitor = (void *) GetProcAddress(GetModuleHandleA("shcore.dll"), "GetDpiForMonitor");
 
 	DXGI_SWAP_CHAIN_DESC1 sd = {0};
@@ -253,7 +292,7 @@ bool MTY_WindowCreate(const char *title, MTY_WindowMsgFunc msg_func, const void 
 	e = IDXGIFactory2_MakeWindowAssociation(factory2, ctx->hwnd, DXGI_MWA_NO_WINDOW_CHANGES);
 	if (e != S_OK) {r = false; goto except;}
 
-	MTY_RendererCreate(&ctx->renderer);
+	ctx->renderer = MTY_RendererCreate();
 
 	except:
 
@@ -273,9 +312,9 @@ bool MTY_WindowCreate(const char *title, MTY_WindowMsgFunc msg_func, const void 
 		IDXGIDevice2_Release(device2);
 
 	if (!r)
-		MTY_WindowDestroy(window);
+		MTY_WindowDestroy(&ctx);
 
-	return r;
+	return ctx;
 }
 
 void MTY_AppRun(MTY_AppFunc func, const void *opaque)
@@ -303,7 +342,7 @@ void MTY_WindowSetTitle(MTY_Window *ctx, const char *title, const char *subtitle
 	SetWindowText(ctx->hwnd, full);
 }
 
-static bool window_get_size(MTY_Window *ctx, uint32_t *width, uint32_t *height)
+bool MTY_WindowGetSize(MTY_Window *ctx, uint32_t *width, uint32_t *height)
 {
 	RECT rect = {0};
 	if (GetClientRect(ctx->hwnd, &rect)) {
@@ -324,9 +363,12 @@ void MTY_WindowPoll(MTY_Window *ctx)
 
 	uint32_t width = 0;
 	uint32_t height = 0;
-	if (window_get_size(ctx, &width, &height) && (width != ctx->width || height != ctx->height)) {
+	MTY_WindowGetSize(ctx, &width, &height);
+
+	if (width != ctx->width || height != ctx->height) {
 		IDXGISwapChain2_ResizeBuffers(ctx->swap_chain2, 0, 0, 0,
 			DXGI_FORMAT_UNKNOWN, WINDOW_SWAP_CHAIN_FLAGS);
+
 		ctx->width = width;
 		ctx->height = height;
 	}
@@ -391,7 +433,7 @@ void MTY_WindowSetFullscreen(MTY_Window *ctx)
 	}
 }
 
-void MTY_WindowSetWindowed(MTY_Window *ctx, uint32_t width, uint32_t height)
+void MTY_WindowSetSize(MTY_Window *ctx, uint32_t width, uint32_t height)
 {
 	window_calc_client_area(&width, &height);
 
@@ -414,6 +456,28 @@ void MTY_WindowSetWindowed(MTY_Window *ctx, uint32_t width, uint32_t height)
 bool MTY_WindowIsFullscreen(MTY_Window *ctx)
 {
 	return GetWindowLongPtr(ctx->hwnd, GWL_STYLE) & WS_POPUP;
+}
+
+void MTY_WindowSetRelativeMouse(MTY_Window *ctx, bool relative)
+{
+	if (relative && !ctx->relative) {
+		ctx->relative = true;
+
+		POINT p = {0};
+		GetCursorPos(&p);
+		ctx->clip.left = p.x;
+		ctx->clip.right = p.x + 1;
+		ctx->clip.top = p.y;
+		ctx->clip.bottom = p.y + 1;
+		ClipCursor(&ctx->clip);
+		window_show_cursor(false);
+
+	} else if (!relative && ctx->relative) {
+		ctx->relative = false;
+
+		ClipCursor(NULL);
+		window_show_cursor(true);
+	}
 }
 
 bool MTY_WindowIsForeground(MTY_Window *ctx)
@@ -454,7 +518,8 @@ void MTY_WindowDrawQuad(MTY_Window *ctx, const void *image, const MTY_RenderDesc
 {
 	if (MTY_WindowGetBackBuffer(ctx)) {
 		MTY_RenderDesc mutated = *desc;
-		window_get_size(ctx, &mutated.viewWidth, &mutated.viewHeight);
+		mutated.viewWidth = ctx->width;
+		mutated.viewHeight = ctx->height;
 
 		MTY_RendererDrawQuad(ctx->renderer, MTY_GFX_D3D11, (MTY_Device *) ctx->device,
 			(MTY_Context *) ctx->context, image, &mutated, (MTY_Texture *) ctx->back_buffer);

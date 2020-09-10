@@ -28,12 +28,14 @@ struct MTY_Hash {
 	struct hash_bucket *buckets;
 };
 
-void MTY_HashCreate(uint32_t numBuckets, MTY_Hash **hash)
+MTY_Hash *MTY_HashCreate(uint32_t numBuckets)
 {
-	MTY_Hash *ctx = *hash = MTY_Alloc(1, sizeof(MTY_Hash));
+	MTY_Hash *ctx = MTY_Alloc(1, sizeof(MTY_Hash));
 	ctx->num_buckets = numBuckets == 0 ? HASH_DEFAULT_BUCKETS : numBuckets;
 
 	ctx->buckets = MTY_Alloc(ctx->num_buckets, sizeof(struct hash_bucket));
+
+	return ctx;
 }
 
 bool MTY_HashNextKey(MTY_Hash *ctx, uint64_t *iter, const char **key)
@@ -109,7 +111,7 @@ void MTY_HashDestroy(MTY_Hash **hash, void (*freeFunc)(void *value))
 
 static void *hash_get(MTY_Hash *ctx, const char *key, bool pop)
 {
-	struct hash_bucket *b = &ctx->buckets[MTY_CryptoDJB2(key) % ctx->num_buckets];
+	struct hash_bucket *b = &ctx->buckets[MTY_DJB2(key) % ctx->num_buckets];
 
 	for (uint32_t x = 0; x < b->num_nodes; x++) {
 		struct hash_node *n = &b->nodes[x];
@@ -158,7 +160,7 @@ void *MTY_HashPopInt(MTY_Hash *ctx, int64_t key)
 
 void *MTY_HashSet(MTY_Hash *ctx, const char *key, const void *value)
 {
-	struct hash_bucket *b = &ctx->buckets[MTY_CryptoDJB2(key) % ctx->num_buckets];
+	struct hash_bucket *b = &ctx->buckets[MTY_DJB2(key) % ctx->num_buckets];
 	struct hash_node *n = NULL;
 
 	for (uint32_t x = 0; x < b->num_nodes; x++) {

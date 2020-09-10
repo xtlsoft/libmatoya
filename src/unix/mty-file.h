@@ -16,7 +16,7 @@ static FILE *mty_fopen(const char *path, const char *mode)
 {
 	FILE *f = fopen(path, mode);
 	if (!f) {
-		MTY_Log("'fopen' failed to open '%s' with errno %d", MTY_FsName(path, true), errno);
+		MTY_Log("'fopen' failed to open '%s' with errno %d", MTY_GetFileName(path, true), errno);
 		return NULL;
 	}
 
@@ -31,7 +31,7 @@ static size_t mty_file_size(const char *path)
 	if (e != 0) {
 		// Since these functions are lazily used to check the existence of files, don't log ENOENT
 		if (errno != ENOENT)
-			MTY_Log("'stat' failed to query '%s' with errno %d", MTY_FsName(path, true), errno);
+			MTY_Log("'stat' failed to query '%s' with errno %d", MTY_GetFileName(path, true), errno);
 
 		return 0;
 	}

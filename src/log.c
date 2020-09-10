@@ -62,7 +62,7 @@ void MTY_SetLogCallback(void (*callback)(const char *msg, void *opaque), const v
 	LOG_OPAQUE = (void *) opaque;
 }
 
-void MTY_DisableLogging(bool disabled)
+void MTY_DisableLog(bool disabled)
 {
 	MTY_Atomic32Set(&LOG_DISABLED, disabled ? 1 : 0);
 }

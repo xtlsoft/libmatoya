@@ -16,19 +16,17 @@ FLAGS = \
 ifdef DEBUG
 FLAGS := $(FLAGS) -O0 -g
 else
-FLAGS := $(FLAGS) -O3 -fvisibility=hidden
-ifdef LTO
-FLAGS := $(FLAGS) -flto
-endif
+FLAGS := $(FLAGS) -O3 -g0 -fvisibility=hidden
 endif
 
 LOCAL_MODULE_FILENAME := libmatoya
 LOCAL_MODULE := libmatoya
 
-LOCAL_C_INCLUDES = \
+LOCAL_C_INCLUDES := \
 	src \
 	src/unix \
-	src/unix/android \
+	src/unix/linux \
+	src/unix/linux/android \
 	deps
 
 DEFS = \
@@ -58,11 +56,10 @@ LOCAL_SRC_FILES := \
 	src/unix/fs.c \
 	src/unix/memory.c \
 	src/unix/proc.c \
-	src/unix/request.c \
 	src/unix/thread.c \
 	src/unix/time.c \
 	src/unix/aes-gcm-openssl.c \
-	src/unix/android/window.c \
-	src/unix/android/audio.c
+	src/unix/linux/android/window.c \
+	src/unix/linux/android/audio.c
 
 include $(BUILD_STATIC_LIBRARY)

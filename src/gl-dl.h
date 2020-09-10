@@ -6,8 +6,6 @@
 
 #pragma once
 
-#include "GL/glcorearb30.h"
-
 
 // Interface
 
@@ -16,6 +14,8 @@
 #define gl_dl_global_init() true
 
 #else
+
+#include "GL/glcorearb30.h"
 
 static PFNGLGENFRAMEBUFFERSPROC         glGenFramebuffers;
 static PFNGLDELETEFRAMEBUFFERSPROC      glDeleteFramebuffers;

@@ -37,15 +37,12 @@ static void *thread_func(void *opaque)
 	return NULL;
 }
 
-void MTY_ThreadCreate(void *(*func)(void *opaque), const void *opaque, MTY_Thread **thread)
+static MTY_Thread *thread_create(void *(*func)(void *opaque), const void *opaque, bool detach)
 {
 	MTY_Thread *ctx = MTY_Alloc(1, sizeof(MTY_Thread));
 	ctx->func = func;
 	ctx->opaque = (void *) opaque;
-	ctx->detach = !thread;
-
-	if (thread)
-		*thread = ctx;
+	ctx->detach = detach;
 
 	int32_t e = pthread_create(&ctx->thread, NULL, thread_func, ctx);
 
@@ -58,7 +55,20 @@ void MTY_ThreadCreate(void *(*func)(void *opaque), const void *opaque, MTY_Threa
 			MTY_Fatal("'pthread_detach' failed with error %d", e);
 
 		ctx->thread = 0;
+		ctx = NULL;
 	}
+
+	return ctx;
+}
+
+MTY_Thread *MTY_ThreadCreate(void *(*func)(void *opaque), const void *opaque)
+{
+	return thread_create(func, opaque, false);
+}
+
+void MTY_ThreadDetach(void *(*func)(void *opaque), const void *opaque)
+{
+	thread_create(func, opaque, true);
 }
 
 int64_t MTY_ThreadIDGet(MTY_Thread *ctx)
@@ -94,13 +104,15 @@ struct MTY_Mutex {
 	pthread_mutex_t mutex;
 };
 
-void MTY_MutexCreate(MTY_Mutex **mutex)
+MTY_Mutex *MTY_MutexCreate(void)
 {
-	MTY_Mutex *ctx = *mutex = MTY_Alloc(1, sizeof(MTY_Mutex));
+	MTY_Mutex *ctx = MTY_Alloc(1, sizeof(MTY_Mutex));
 
 	int32_t e = pthread_mutex_init(&ctx->mutex, NULL);
 	if (e != 0)
 		MTY_Fatal("'pthread_mutex_init' failed with error %d", e);
+
+	return ctx;
 }
 
 void MTY_MutexLock(MTY_Mutex *ctx)
@@ -153,13 +165,15 @@ struct MTY_Cond {
 	pthread_cond_t cond;
 };
 
-void MTY_CondCreate(MTY_Cond **cond)
+MTY_Cond *MTY_CondCreate(void)
 {
-	MTY_Cond *ctx = *cond = MTY_Alloc(1, sizeof(MTY_Cond));
+	MTY_Cond *ctx = MTY_Alloc(1, sizeof(MTY_Cond));
 
 	int32_t e = pthread_cond_init(&ctx->cond, NULL);
 	if (e != 0)
 		MTY_Fatal("'pthread_cond_init' failed with error %d", e);
+
+	return ctx;
 }
 
 bool MTY_CondWait(MTY_Cond *ctx, MTY_Mutex *mutex, int32_t timeout)

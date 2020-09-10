@@ -25,9 +25,9 @@ void MTY_CryptoHash(MTY_Algorithm algo, const void *input, size_t inputSize, con
 			}
 			break;
 		case MTY_ALGORITHM_SHA1_HEX: {
-			uint8_t bytes[MTY_CRYPTO_SHA1_SIZE];
-			MTY_CryptoHash(MTY_ALGORITHM_SHA1, input, inputSize, NULL, 0, bytes, MTY_CRYPTO_SHA1_SIZE);
-			MTY_CryptoBytesToHex(bytes, sizeof(bytes), output, outputSize);
+			uint8_t bytes[MTY_SHA1_SIZE];
+			MTY_CryptoHash(MTY_ALGORITHM_SHA1, input, inputSize, NULL, 0, bytes, MTY_SHA1_SIZE);
+			MTY_BytesToHex(bytes, sizeof(bytes), output, outputSize);
 			break;
 		}
 		case MTY_ALGORITHM_SHA256:
@@ -38,9 +38,9 @@ void MTY_CryptoHash(MTY_Algorithm algo, const void *input, size_t inputSize, con
 			}
 			break;
 		case MTY_ALGORITHM_SHA256_HEX: {
-			uint8_t bytes[MTY_CRYPTO_SHA256_SIZE];
-			MTY_CryptoHash(MTY_ALGORITHM_SHA256, input, inputSize, NULL, 0, bytes, MTY_CRYPTO_SHA256_SIZE);
-			MTY_CryptoBytesToHex(bytes, sizeof(bytes), output, outputSize);
+			uint8_t bytes[MTY_SHA256_SIZE];
+			MTY_CryptoHash(MTY_ALGORITHM_SHA256, input, inputSize, NULL, 0, bytes, MTY_SHA256_SIZE);
+			MTY_BytesToHex(bytes, sizeof(bytes), output, outputSize);
 			break;
 		}
 	}
@@ -49,7 +49,7 @@ void MTY_CryptoHash(MTY_Algorithm algo, const void *input, size_t inputSize, con
 
 // Random
 
-void MTY_CryptoRandom(void *output, size_t size)
+void MTY_RandomBytes(void *output, size_t size)
 {
 	CCRNGStatus e = CCRandomGenerateBytes(output, size);
 	if (e != kCCSuccess)

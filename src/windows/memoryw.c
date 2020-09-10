@@ -83,7 +83,7 @@ bool MTY_WideToMulti(const wchar_t *src, char *dst, size_t len)
 	if (n <= 0) {
 		DWORD e = GetLastError();
 		if (e != ERROR_NO_UNICODE_TRANSLATION)
-			MTY_Log("'WideCharToMultiByte' failed with error %x", e);
+			MTY_Log("'WideCharToMultiByte' failed with error 0x%X", e);
 
 		// Fall back to current code page translation
 		snprintf(dst, len, "%ls", src);
@@ -103,7 +103,7 @@ bool MTY_MultiToWide(const char *src, wchar_t *dst, uint32_t len)
 	if (n <= 0) {
 		DWORD e = GetLastError();
 		if (e != ERROR_NO_UNICODE_TRANSLATION)
-			MTY_Log("'MultiByteToWideChar' failed with error %x", e);
+			MTY_Log("'MultiByteToWideChar' failed with error 0x%X", e);
 
 		// Fall back to current code page translation
 		_snwprintf_s(dst, len, _TRUNCATE, L"%hs", src);

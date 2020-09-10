@@ -208,16 +208,19 @@ static void gfx_gl_reload_textures(struct gfx_gl *ctx, const void *image, const 
 			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, desc->imageWidth, desc->cropHeight, GL_RGBA, GL_UNSIGNED_BYTE, image);
 			break;
 		}
-		case MTY_COLOR_FORMAT_NV12: {
+		case MTY_COLOR_FORMAT_NV12:
+		case MTY_COLOR_FORMAT_NV16: {
+			uint32_t div = desc->format == MTY_COLOR_FORMAT_NV12 ? 2 : 1;
+
 			// Y
 			gfx_gl_rtv_refresh(&ctx->staging[0], GL_R8, GL_RED, desc->imageWidth, desc->cropHeight);
 			glBindTexture(GL_TEXTURE_2D, ctx->staging[0].texture);
 			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, desc->imageWidth, desc->cropHeight, GL_RED, GL_UNSIGNED_BYTE, image);
 
 			// UV
-			gfx_gl_rtv_refresh(&ctx->staging[1], GL_RG8, GL_RG, desc->imageWidth / 2, desc->cropHeight / 2);
+			gfx_gl_rtv_refresh(&ctx->staging[1], GL_RG8, GL_RG, desc->imageWidth / 2, desc->cropHeight / div);
 			glBindTexture(GL_TEXTURE_2D, ctx->staging[1].texture);
-			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, desc->imageWidth / 2, desc->cropHeight / 2, GL_RG, GL_UNSIGNED_BYTE, (uint8_t *) image + desc->imageWidth * desc->imageHeight);
+			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, desc->imageWidth / 2, desc->cropHeight / div, GL_RG, GL_UNSIGNED_BYTE, (uint8_t *) image + desc->imageWidth * desc->imageHeight);
 			break;
 		}
 		case MTY_COLOR_FORMAT_I420:

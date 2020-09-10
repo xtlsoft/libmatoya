@@ -13,30 +13,15 @@ struct MTY_AESGCM {
 	EVP_CIPHER_CTX *dec;
 };
 
-bool MTY_AESGCMCreate(const void *key, size_t keySize, MTY_AESGCM **aesgcm)
+MTY_AESGCM *MTY_AESGCMCreate(const void *key)
 {
 	if (!crypto_dl_global_init())
 		return false;
 
-	MTY_AESGCM *ctx = *aesgcm = MTY_Alloc(1, sizeof(MTY_AESGCM));
+	MTY_AESGCM *ctx = MTY_Alloc(1, sizeof(MTY_AESGCM));
 	bool r = true;
 
-	const EVP_CIPHER *cipher = NULL;
-	switch (keySize) {
-		case 16:
-			cipher = EVP_aes_128_gcm();
-			break;
-		case 24:
-			cipher = EVP_aes_192_gcm();
-			break;
-		case 32:
-			cipher = EVP_aes_256_gcm();
-			break;
-		default:
-			MTY_Log("Invalid AES key size %zu", keySize);
-			r = false;
-			goto except;
-	}
+	const EVP_CIPHER *cipher = EVP_aes_128_gcm();
 
 	ctx->enc = EVP_CIPHER_CTX_new();
 	if (!ctx->enc) {
@@ -69,19 +54,14 @@ bool MTY_AESGCMCreate(const void *key, size_t keySize, MTY_AESGCM **aesgcm)
 	except:
 
 	if (!r)
-		MTY_AESGCMDestroy(aesgcm);
+		MTY_AESGCMDestroy(&ctx);
 
-	return r;
+	return ctx;
 }
 
-bool MTY_AESGCMEncrypt(MTY_AESGCM *ctx, const void *plainText, size_t textSize, const void *nonce,
-	size_t nonceSize, void *hash, size_t hashSize, void *cipherText)
+bool MTY_AESGCMEncrypt(MTY_AESGCM *ctx, const void *nonce, const void *plainText, size_t size,
+	void *hash, void *cipherText)
 {
-	if (nonceSize < 12) {
-		MTY_Log("'nonceSize' is less than 12 bytes");
-		return false;
-	}
-
 	int32_t e = EVP_CipherInit_ex(ctx->enc, NULL, NULL, NULL, nonce, 1);
 	if (e != 1) {
 		MTY_Log("'EVP_CipherInit' failed with error %d", e);
@@ -89,7 +69,7 @@ bool MTY_AESGCMEncrypt(MTY_AESGCM *ctx, const void *plainText, size_t textSize, 
 	}
 
 	int32_t len = 0;
-	e = EVP_EncryptUpdate(ctx->enc, cipherText, &len, plainText, textSize);
+	e = EVP_EncryptUpdate(ctx->enc, cipherText, &len, plainText, size);
 	if (e != 1) {
 		MTY_Log("'EVP_EncryptUpdate' failed with error %d", e);
 		return false;
@@ -101,7 +81,7 @@ bool MTY_AESGCMEncrypt(MTY_AESGCM *ctx, const void *plainText, size_t textSize, 
 		return false;
 	}
 
-	e = EVP_CIPHER_CTX_ctrl(ctx->enc, EVP_CTRL_GCM_GET_TAG, hashSize, hash);
+	e = EVP_CIPHER_CTX_ctrl(ctx->enc, EVP_CTRL_GCM_GET_TAG, 16, hash);
 	if (e != 1) {
 		MTY_Log("'EVP_CIPHER_CTX_ctrl' failed with error %d", e);
 		return false;
@@ -110,14 +90,9 @@ bool MTY_AESGCMEncrypt(MTY_AESGCM *ctx, const void *plainText, size_t textSize, 
 	return true;
 }
 
-bool MTY_AESGCMDecrypt(MTY_AESGCM *ctx, const void *cipherText, size_t textSize, const void *nonce,
-	size_t nonceSize, const void *hash, size_t hashSize, void *plainText)
+bool MTY_AESGCMDecrypt(MTY_AESGCM *ctx, const void *nonce, const void *cipherText, size_t size,
+	const void *hash, void *plainText)
 {
-	if (nonceSize < 12) {
-		MTY_Log("'nonceSize' is less than 12 bytes");
-		return false;
-	}
-
 	int32_t e = EVP_CipherInit_ex(ctx->dec, NULL, NULL, NULL, nonce, 0);
 	if (e != 1) {
 		MTY_Log("'EVP_CipherInit' failed with error %d", e);
@@ -125,13 +100,13 @@ bool MTY_AESGCMDecrypt(MTY_AESGCM *ctx, const void *cipherText, size_t textSize,
 	}
 
 	int32_t len = 0;
-	e = EVP_DecryptUpdate(ctx->dec, plainText, &len, cipherText, textSize);
+	e = EVP_DecryptUpdate(ctx->dec, plainText, &len, cipherText, size);
 	if (e != 1) {
 		MTY_Log("'EVP_DecryptUpdate' failed with error %d", e);
 		return false;
 	}
 
-	e = EVP_CIPHER_CTX_ctrl(ctx->dec, EVP_CTRL_GCM_SET_TAG, hashSize, (void *) hash);
+	e = EVP_CIPHER_CTX_ctrl(ctx->dec, EVP_CTRL_GCM_SET_TAG, 16, (void *) hash);
 	if (e != 1) {
 		MTY_Log("'EVP_CIPHER_CTX_ctrl' failed with error %d", e);
 		return false;

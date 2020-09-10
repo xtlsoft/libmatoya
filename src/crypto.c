@@ -25,7 +25,7 @@ static const char CRYPTO_HEX_REVERSE[CHAR_MAX] = {
 
 static const char CRYPTO_B64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-void MTY_CryptoBytesToHex(const void *bytes, size_t size, char *hex, size_t hexSize)
+void MTY_BytesToHex(const void *bytes, size_t size, char *hex, size_t hexSize)
 {
 	if (hexSize == 0)
 		return;
@@ -45,7 +45,7 @@ void MTY_CryptoBytesToHex(const void *bytes, size_t size, char *hex, size_t hexS
 	hex[offset] = '\0';
 }
 
-void MTY_CryptoHexToBytes(const char *hex, void *bytes, size_t size)
+void MTY_HexToBytes(const char *hex, void *bytes, size_t size)
 {
 	for (size_t x = 0; x < strlen(hex); x++) {
 		int8_t b = (int8_t) hex[x];
@@ -71,7 +71,7 @@ void MTY_CryptoHexToBytes(const char *hex, void *bytes, size_t size)
 	}
 }
 
-void MTY_CryptoBytesToBase64(const void *bytes, size_t size, char *b64, size_t b64Size)
+void MTY_BytesToBase64(const void *bytes, size_t size, char *b64, size_t b64Size)
 {
 	if (b64Size == 0)
 		return;
@@ -115,7 +115,7 @@ void MTY_CryptoBytesToBase64(const void *bytes, size_t size, char *b64, size_t b
 	}
 }
 
-uint32_t MTY_CryptoCRC32(const void *data, size_t size)
+uint32_t MTY_CRC32(const void *data, size_t size)
 {
 	uint32_t crc = 0;
 	uint32_t table[0x100];
@@ -135,7 +135,7 @@ uint32_t MTY_CryptoCRC32(const void *data, size_t size)
 	return crc;
 }
 
-uint32_t MTY_CryptoDJB2(const char *str)
+uint32_t MTY_DJB2(const char *str)
 {
 	uint32_t hash = 5381;
 
@@ -148,19 +148,20 @@ uint32_t MTY_CryptoDJB2(const char *str)
 bool MTY_CryptoHashFile(MTY_Algorithm algo, const char *path, const void *key, size_t keySize,
 	void *output, size_t outputSize)
 {
-	void *input = NULL;
 	size_t size = 0;
-	bool r = MTY_FsRead(path, &input, &size);
+	void *input = MTY_ReadFile(path, &size);
 
-	if (r) {
+	if (input) {
 		MTY_CryptoHash(algo, input, size, key, keySize, output, outputSize);
 		MTY_Free(input);
+
+		return true;
 	}
 
-	return r;
+	return false;
 }
 
-uint32_t MTY_CryptoRandomUInt(uint32_t minVal, uint32_t maxVal)
+uint32_t MTY_RandomUInt(uint32_t minVal, uint32_t maxVal)
 {
 	if (minVal >= maxVal) {
 		MTY_Log("'minVal' can not be >= maxVal");
@@ -168,7 +169,7 @@ uint32_t MTY_CryptoRandomUInt(uint32_t minVal, uint32_t maxVal)
 	}
 
 	uint32_t val = 0;
-	MTY_CryptoRandom(&val, sizeof(uint32_t));
+	MTY_RandomBytes(&val, sizeof(uint32_t));
 
 	return val % (maxVal - minVal) + minVal;
 }

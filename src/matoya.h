@@ -24,8 +24,8 @@ extern "C" {
 
 typedef struct MTY_Audio MTY_Audio;
 
-MTY_EXPORT bool
-MTY_AudioCreate(MTY_Audio **audio, uint32_t sample_rate);
+MTY_EXPORT MTY_Audio *
+MTY_AudioCreate(uint32_t sampleRate);
 
 MTY_EXPORT uint32_t
 MTY_AudioGetQueuedFrames(MTY_Audio *ctx);
@@ -46,12 +46,13 @@ MTY_EXPORT void
 MTY_AudioDestroy(MTY_Audio **audio);
 
 
-/// @module cmacro
+/// @module cminmax
 
-#define MTY_MIN(a, b)  ((a) > (b) ? (b) : (a))
-#define MTY_MAX(a, b)  ((a) > (b) ? (a) : (b))
-#define MTY_ALIGN16(v) ((v) + 15 & ~((uintptr_t) 15))
-#define MTY_ALIGN32(v) ((v) + 31 & ~((uintptr_t) 31))
+#define MTY_MIN(a, b) \
+	((a) > (b) ? (b) : (a))
+
+#define MTY_MAX(a, b) \
+	((a) > (b) ? (a) : (b))
 
 
 /// @module compress
@@ -63,29 +64,31 @@ typedef enum {
 	MTY_IMAGE_MAKE_32 = 0x7FFFFFFF,
 } MTY_Image;
 
-MTY_EXPORT bool
-MTY_ImageCompress(const void *input, uint32_t width, uint32_t height, MTY_Image type, void **output, size_t *outputSize);
-
-MTY_EXPORT bool
-MTY_ImageDecompress(const void *input, size_t size, void **output, uint32_t *width, uint32_t *height);
+MTY_EXPORT void *
+MTY_CompressImage(MTY_Image type, const void *input, uint32_t width, uint32_t height,
+	size_t *outputSize);
 
 MTY_EXPORT void *
-MTY_ImageCrop(const void *image, uint32_t cropWidth, uint32_t cropHeight, uint32_t *width, uint32_t *height);
+MTY_DecompressImage(const void *input, size_t size, uint32_t *width, uint32_t *height);
 
-MTY_EXPORT bool
-MTY_Compress(const void *input, size_t inputSize, void **output, size_t *outputSize);
+MTY_EXPORT void *
+MTY_CropImage(const void *image, uint32_t cropWidth, uint32_t cropHeight, uint32_t *width,
+	uint32_t *height);
 
-MTY_EXPORT bool
-MTY_Decompress(const void *input, size_t inputSize, void **output, size_t *outputSize);
+MTY_EXPORT void *
+MTY_Compress(const void *input, size_t inputSize, size_t *outputSize);
+
+MTY_EXPORT void *
+MTY_Decompress(const void *input, size_t inputSize, size_t *outputSize);
 
 
 /// @module crypto
 
-#define MTY_CRYPTO_SHA1_SIZE       20
-#define MTY_CRYPTO_SHA1_HEX_SIZE   41
+#define MTY_SHA1_SIZE       20
+#define MTY_SHA1_HEX_SIZE   41
 
-#define MTY_CRYPTO_SHA256_SIZE     32
-#define MTY_CRYPTO_SHA256_HEX_SIZE 65
+#define MTY_SHA256_SIZE     32
+#define MTY_SHA256_HEX_SIZE 65
 
 typedef enum {
 	MTY_ALGORITHM_SHA1       = 1,
@@ -98,19 +101,19 @@ typedef enum {
 typedef struct MTY_AESGCM MTY_AESGCM;
 
 MTY_EXPORT uint32_t
-MTY_CryptoCRC32(const void *data, size_t size);
+MTY_CRC32(const void *data, size_t size);
 
 MTY_EXPORT uint32_t
-MTY_CryptoDJB2(const char *str);
+MTY_DJB2(const char *str);
 
 MTY_EXPORT void
-MTY_CryptoBytesToHex(const void *bytes, size_t size, char *hex, size_t hexSize);
+MTY_BytesToHex(const void *bytes, size_t size, char *hex, size_t hexSize);
 
 MTY_EXPORT void
-MTY_CryptoHexToBytes(const char *hex, void *bytes, size_t size);
+MTY_HexToBytes(const char *hex, void *bytes, size_t size);
 
 MTY_EXPORT void
-MTY_CryptoBytesToBase64(const void *bytes, size_t size, char *b64, size_t b64Size);
+MTY_BytesToBase64(const void *bytes, size_t size, char *b64, size_t b64Size);
 
 MTY_EXPORT void
 MTY_CryptoHash(MTY_Algorithm algo, const void *input, size_t inputSize, const void *key,
@@ -121,21 +124,21 @@ MTY_CryptoHashFile(MTY_Algorithm algo, const char *path, const void *key, size_t
 	void *output, size_t outputSize);
 
 MTY_EXPORT void
-MTY_CryptoRandom(void *output, size_t size);
+MTY_RandomBytes(void *output, size_t size);
 
 MTY_EXPORT uint32_t
-MTY_CryptoRandomUInt(uint32_t minVal, uint32_t maxVal);
+MTY_RandomUInt(uint32_t minVal, uint32_t maxVal);
+
+MTY_EXPORT MTY_AESGCM *
+MTY_AESGCMCreate(const void *key);
 
 MTY_EXPORT bool
-MTY_AESGCMCreate(const void *key, size_t keySize, MTY_AESGCM **aesgcm);
+MTY_AESGCMEncrypt(MTY_AESGCM *ctx, const void *nonce, const void *plainText, size_t size,
+	void *hash, void *cipherText);
 
 MTY_EXPORT bool
-MTY_AESGCMEncrypt(MTY_AESGCM *ctx, const void *plainText, size_t textSize, const void *nonce,
-	size_t nonceSize, void *hash, size_t hashSize, void *cipherText);
-
-MTY_EXPORT bool
-MTY_AESGCMDecrypt(MTY_AESGCM *ctx, const void *cipherText, size_t textSize, const void *nonce,
-	size_t nonceSize, const void *hash, size_t hashSize, void *plainText);
+MTY_AESGCMDecrypt(MTY_AESGCM *ctx, const void *nonce, const void *cipherText, size_t size,
+	const void *hash, void *plainText);
 
 MTY_EXPORT void
 MTY_AESGCMDestroy(MTY_AESGCM **aesgcm);
@@ -143,14 +146,22 @@ MTY_AESGCMDestroy(MTY_AESGCM **aesgcm);
 
 /// @module fs
 
+#define MTY_URL_MAX  1024
 #define MTY_PATH_MAX 1280
 
 typedef enum {
-	MTY_DIR_CWD     = 1,
-	MTY_DIR_HOME    = 2,
-	MTY_DIR_PROGRAM = 3,
-	MTY_DIR_MAKE_32 = 0x7FFFFFFF,
-} MTY_FsDir;
+	MTY_DIR_CWD        = 1,
+	MTY_DIR_HOME       = 2,
+	MTY_DIR_EXECUTABLE = 3,
+	MTY_DIR_PROGRAMS   = 4,
+	MTY_DIR_MAKE_32    = 0x7FFFFFFF,
+} MTY_Dir;
+
+typedef enum {
+	MTY_FILE_MODE_WRITE   = 1,
+	MTY_FILE_MODE_READ    = 2,
+	MTY_FILE_MODE_MAKE_32 = 0x7FFFFFFF,
+} MTY_FileMode;
 
 typedef struct {
 	char *path;
@@ -165,64 +176,75 @@ typedef struct {
 
 typedef struct MTY_LockFile MTY_LockFile;
 
-MTY_EXPORT bool
-MTY_FsRead(const char *path, void **data, size_t *size);
+MTY_EXPORT void *
+MTY_ReadFile(const char *path, size_t *size);
 
 MTY_EXPORT bool
-MTY_FsWrite(const char *path, const void *data, size_t size);
+MTY_WriteFile(const char *path, const void *data, size_t size);
 
 MTY_EXPORT bool
-MTY_FsWriteText(const char *path, const char *fmt, ...);
+MTY_WriteTextFile(const char *path, const char *fmt, ...);
 
 MTY_EXPORT bool
-MTY_FsAppendText(const char *path, const char *fmt, ...);
+MTY_AppendTextToFile(const char *path, const char *fmt, ...);
 
 MTY_EXPORT bool
-MTY_FsDelete(const char *path);
+MTY_DeleteFile(const char *path);
 
 MTY_EXPORT bool
-MTY_FsExists(const char *path);
+MTY_FileExists(const char *path);
 
 MTY_EXPORT bool
-MTY_FsMkdir(const char *path);
+MTY_Mkdir(const char *path);
 
 MTY_EXPORT const char *
-MTY_FsPath(const char *dir, const char *file);
+MTY_Path(const char *dir, const char *file);
 
 MTY_EXPORT bool
-MTY_FsCopy(const char *src, const char *dst);
+MTY_CopyFile(const char *src, const char *dst);
+
+MTY_EXPORT bool
+MTY_MoveFile(const char *src, const char *dst);
 
 MTY_EXPORT const char *
-MTY_FsGetDir(MTY_FsDir dir);
+MTY_GetDir(MTY_Dir dir);
 
-MTY_EXPORT bool
-MTY_FsLockCreate(const char *path, MTY_LockFile **lock);
+MTY_EXPORT MTY_LockFile *
+MTY_LockFileCreate(const char *path, MTY_FileMode mode);
 
 MTY_EXPORT void
-MTY_FsLockDestroy(MTY_LockFile **lock);
+MTY_LockFileDestroy(MTY_LockFile **lock);
 
 MTY_EXPORT const char *
-MTY_FsName(const char *path, bool extension);
+MTY_GetFileName(const char *path, bool extension);
 
 MTY_EXPORT MTY_FileList *
-MTY_FsFileList(const char *path, const char *filter);
+MTY_GetFileList(const char *path, const char *filter);
 
 MTY_EXPORT void
-MTY_FsFreeFileList(MTY_FileList **fileList);
+MTY_FreeFileList(MTY_FileList **fileList);
 
 
 /// @module json
+/// @details The `MTY_JSON` struct is a special kind of object with different semantics
+///     than a typical object. The `JSON` prefix is assigned to all functions that return
+///     or operate on JSON, while `ReadFile` and `Parse` act as constructors instead of
+///     the typical `Create`. Since a JSON object serializes data rather than holding
+///     state, the `const` keyword makes sense.
+///
+///     The `JSONObjGetType` style macros make dealing with JSON easier in C. Other
+///     languages that support generics would not need these.
 
 typedef struct MTY_JSON MTY_JSON;
 
-MTY_EXPORT bool
-MTY_JSONParse(const char *input, MTY_JSON **output);
+MTY_EXPORT MTY_JSON *
+MTY_JSONParse(const char *input);
 
 MTY_EXPORT char *
 MTY_JSONStringify(const MTY_JSON *json);
 
-MTY_EXPORT bool
-MTY_JSONReadFile(const char *path, MTY_JSON **output);
+MTY_EXPORT MTY_JSON *
+MTY_JSONReadFile(const char *path);
 
 MTY_EXPORT bool
 MTY_JSONWriteFile(const char *path, const MTY_JSON *json);
@@ -281,8 +303,11 @@ MTY_JSONArray(void);
 MTY_EXPORT bool
 MTY_JSONObjKeyExists(const MTY_JSON *json, const char *key);
 
+MTY_EXPORT const char *
+MTY_JSONObjGetKey(const MTY_JSON *json, uint32_t index);
+
 MTY_EXPORT void
-MTY_JSONObjKeyDelete(MTY_JSON *json, const char *key);
+MTY_JSONObjDeleteKey(MTY_JSON *json, const char *key);
 
 MTY_EXPORT const MTY_JSON *
 MTY_JSONObjGet(const MTY_JSON *json, const char *key);
@@ -294,7 +319,7 @@ MTY_EXPORT bool
 MTY_JSONArrayIndexExists(const MTY_JSON *json, uint32_t index);
 
 MTY_EXPORT void
-MTY_JSONArrayIndexDelete(MTY_JSON *json, uint32_t index);
+MTY_JSONArrayDeleteIndex(MTY_JSON *json, uint32_t index);
 
 MTY_EXPORT const MTY_JSON *
 MTY_JSONArrayGet(const MTY_JSON *json, uint32_t index);
@@ -305,17 +330,74 @@ MTY_JSONArraySet(MTY_JSON *json, uint32_t index, const MTY_JSON *value);
 MTY_EXPORT void
 MTY_JSONArrayAppend(MTY_JSON *json, const MTY_JSON *value);
 
+#define MTY_JSONObjGetString(j, k, v, n) \
+	MTY_JSONToString(MTY_JSONObjGet(j, k), v, n)
+
+#define MTY_JSONObjGetInt(j, k, v) \
+	MTY_JSONToInt(MTY_JSONObjGet(j, k), v)
+
+#define MTY_JSONObjGetUInt(j, k, v) \
+	MTY_JSONToUInt(MTY_JSONObjGet(j, k), v)
+
+#define MTY_JSONObjGetFloat(j, k, v) \
+	MTY_JSONToFloat(MTY_JSONObjGet(j, k), v)
+
+#define MTY_JSONObjGetBool(j, k, v) \
+	MTY_JSONToBool(MTY_JSONObjGet(j, k), v)
+
+#define MTY_JSONObjSetString(j, k, v) \
+	MTY_JSONObjSet(j, k, MTY_JSONFromString(v))
+
+#define MTY_JSONObjSetInt(j, k, v) \
+	MTY_JSONObjSet(j, k, MTY_JSONFromInt(v))
+
+#define MTY_JSONObjSetUInt(j, k, v) \
+	MTY_JSONObjSet(j, k, MTY_JSONFromUInt(v))
+
+#define MTY_JSONObjSetFloat(j, k, v) \
+	MTY_JSONObjSet(j, k, MTY_JSONFromFloat(v))
+
+#define MTY_JSONObjSetBool(j, k, v) \
+	MTY_JSONObjSet(j, k, MTY_JSONFromBool(v))
+
+#define MTY_JSONArrayGetString(j, i, v, n) \
+	MTY_JSONToString(MTY_JSONArrayGet(j, i), v, n)
+
+#define MTY_JSONArrayGetInt(j, i, v) \
+	MTY_JSONToInt(MTY_JSONArrayGet(j, i), v)
+
+#define MTY_JSONArrayGetUInt(j, i, v) \
+	MTY_JSONToUInt(MTY_JSONArrayGet(j, i), v)
+
+#define MTY_JSONArrayGetFloat(j, i, v) \
+	MTY_JSONToFloat(MTY_JSONArrayGet(j, i), v)
+
+#define MTY_JSONArrayGetBool(j, i, v) \
+	MTY_JSONToBool(MTY_JSONArrayGet(j, i), v)
+
+#define MTY_JSONArraySetString(j, i, v) \
+	MTY_JSONArraySet(j, i, MTY_JSONFromString(v))
+
+#define MTY_JSONArraySetInt(j, i, v) \
+	MTY_JSONArraySet(j, i, MTY_JSONFromInt(v))
+
+#define MTY_JSONArraySetUInt(j, i, v) \
+	MTY_JSONArraySet(j, i, MTY_JSONFromUInt(v))
+
+#define MTY_JSONArraySetFloat(j, i, v) \
+	MTY_JSONArraySet(j, i, MTY_JSONFromFloat(v))
+
+#define MTY_JSONArraySetBool(j, i, v) \
+	MTY_JSONArraySet(j, i, MTY_JSONFromBool(v))
+
 
 /// @module log
-
-#define MTY_Log(msg, ...)   MTY_LogParams(__FUNCTION__, msg, ##__VA_ARGS__)
-#define MTY_Fatal(msg, ...) MTY_FatalParams(__FUNCTION__, msg, ##__VA_ARGS__)
 
 MTY_EXPORT void
 MTY_SetLogCallback(void (*callback)(const char *msg, void *opaque), const void *opaque);
 
 MTY_EXPORT void
-MTY_DisableLogging(bool disabled);
+MTY_DisableLog(bool disabled);
 
 MTY_EXPORT void
 MTY_LogParams(const char *func, const char *msg, ...);
@@ -325,6 +407,12 @@ MTY_FatalParams(const char *func, const char *msg, ...);
 
 MTY_EXPORT const char *
 MTY_GetLog(void);
+
+#define MTY_Log(msg, ...) \
+	MTY_LogParams(__FUNCTION__, msg, ##__VA_ARGS__)
+
+#define MTY_Fatal(msg, ...) \
+	MTY_FatalParams(__FUNCTION__, msg, ##__VA_ARGS__)
 
 
 /// @module mem
@@ -389,6 +477,12 @@ MTY_MultiToWide(const char *src, wchar_t *dst, uint32_t len);
 MTY_EXPORT wchar_t *
 MTY_MultiToWideD(const char *src);
 
+#define MTY_Align16(v) \
+	((v) + 0xF & ~((uintptr_t) 0xF))
+
+#define MTY_Align32(v) \
+	((v) + 0x1F & ~((uintptr_t) 0x1F))
+
 
 /// @module proc
 
@@ -398,16 +492,16 @@ MTY_EXPORT MTY_SO *
 MTY_SOLoad(const char *name);
 
 MTY_EXPORT void *
-MTY_SOSymbolGet(MTY_SO *ctx, const char *name);
+MTY_SOGetSymbol(MTY_SO *so, const char *name);
 
 MTY_EXPORT void
 MTY_SOUnload(MTY_SO **so);
 
 MTY_EXPORT const char *
-MTY_ProcName(void);
+MTY_ProcessName(void);
 
 MTY_EXPORT bool
-MTY_ProcRestart(int32_t argc, char * const *argv);
+MTY_RestartProcess(int32_t argc, char * const *argv);
 
 MTY_EXPORT const char *
 MTY_Hostname(void);
@@ -430,6 +524,8 @@ typedef enum {
 	MTY_COLOR_FORMAT_NV12    = 2,
 	MTY_COLOR_FORMAT_I420    = 3,
 	MTY_COLOR_FORMAT_I444    = 4,
+	MTY_COLOR_FORMAT_NV16    = 5,
+	MTY_COLOR_FORMAT_RGB565  = 6,
 	MTY_COLOR_FORMAT_MAKE_32 = 0x7FFFFFFF,
 } MTY_ColorFormat;
 
@@ -467,44 +563,23 @@ typedef struct MTY_Context MTY_Context;
 typedef struct MTY_Texture MTY_Texture;
 typedef struct MTY_Renderer MTY_Renderer;
 
-MTY_EXPORT bool
-MTY_RendererCreate(MTY_Renderer **renderer);
+MTY_EXPORT MTY_Renderer *
+MTY_RendererCreate(void);
 
 MTY_EXPORT bool
-MTY_RendererDrawQuad(MTY_Renderer *ctx, MTY_GFX api, MTY_Device *device, MTY_Context *context,
-	const void *image, const MTY_RenderDesc *desc, MTY_Texture *dest);
+MTY_RendererDrawQuad(MTY_Renderer *ctx, MTY_GFX api, MTY_Device *device,
+	MTY_Context *context, const void *image, const MTY_RenderDesc *desc,
+	MTY_Texture *dest);
 
 MTY_EXPORT void
 MTY_RendererDestroy(MTY_Renderer **renderer);
 
 
-/// @module request
-
-#define MTY_URL_MAX 1024
-
-typedef struct MTY_Request MTY_Request;
-
-MTY_EXPORT bool
-MTY_RequestCreate(const char *url, const char *method, const char *headers,
-	const void *body, size_t size, int32_t timeout, MTY_Request **request);
-
-MTY_EXPORT bool
-MTY_RequestGetStatusCode(MTY_Request *ctx, uint32_t *statusCode);
-
-MTY_EXPORT bool
-MTY_RequestGetBody(MTY_Request *ctx, void **body, size_t *size);
-
-MTY_EXPORT bool
-MTY_RequestGetHeader(MTY_Request *ctx, const char *key, char *value, size_t size);
-
-MTY_EXPORT void
-MTY_RequestDestroy(MTY_Request **response);
-
-
 /// @module sort
 
 MTY_EXPORT void
-MTY_Sort(void *base, size_t nElements, size_t size, int32_t (*compare)(const void *a, const void *b));
+MTY_Sort(void *base, size_t nElements, size_t size,
+	int32_t (*compare)(const void *a, const void *b));
 
 
 /// @module struct
@@ -519,8 +594,8 @@ typedef struct MTY_Hash MTY_Hash;
 typedef struct MTY_Queue MTY_Queue;
 typedef struct MTY_List MTY_List;
 
-MTY_EXPORT void
-MTY_HashCreate(uint32_t numBuckets, MTY_Hash **hash);
+MTY_EXPORT MTY_Hash *
+MTY_HashCreate(uint32_t numBuckets);
 
 MTY_EXPORT void *
 MTY_HashGet(MTY_Hash *ctx, const char *key);
@@ -549,32 +624,32 @@ MTY_HashNextKeyInt(MTY_Hash *ctx, uint64_t *iter, int64_t *key);
 MTY_EXPORT void
 MTY_HashDestroy(MTY_Hash **hash, void (*freeFunc)(void *value));
 
-MTY_EXPORT void
-MTY_QueueCreate(uint32_t len, size_t bufSize, MTY_Queue **queue);
+MTY_EXPORT MTY_Queue *
+MTY_QueueCreate(uint32_t len, size_t bufSize);
 
 MTY_EXPORT uint32_t
 MTY_QueueLength(MTY_Queue *ctx);
 
-MTY_EXPORT bool
-MTY_QueuePush(MTY_Queue *ctx, const void *opaque, size_t size);
-
-MTY_EXPORT bool
-MTY_QueuePop(MTY_Queue *ctx, int32_t timeout, void **opaque, size_t *size);
-
-MTY_EXPORT bool
-MTY_QueuePushBegin(MTY_Queue *ctx, void **buffer);
+MTY_EXPORT void *
+MTY_QueueAcquireBuffer(MTY_Queue *ctx);
 
 MTY_EXPORT void
-MTY_QueuePushEnd(MTY_Queue *ctx, size_t size);
+MTY_QueuePush(MTY_Queue *ctx, size_t size);
 
 MTY_EXPORT bool
-MTY_QueuePopBegin(MTY_Queue *ctx, int32_t timeout, void **buffer, size_t *size);
+MTY_QueuePop(MTY_Queue *ctx, int32_t timeout, void **buffer, size_t *size);
 
 MTY_EXPORT bool
-MTY_QueuePopLastBegin(MTY_Queue *ctx, int32_t timeout, void **buffer, size_t *size);
+MTY_QueuePopLast(MTY_Queue *ctx, int32_t timeout, void **buffer, size_t *size);
 
 MTY_EXPORT void
-MTY_QueuePopEnd(MTY_Queue *ctx);
+MTY_QueueReleaseBuffer(MTY_Queue *ctx);
+
+MTY_EXPORT bool
+MTY_QueuePushPtr(MTY_Queue *ctx, const void *opaque, size_t size);
+
+MTY_EXPORT bool
+MTY_QueuePopPtr(MTY_Queue *ctx, int32_t timeout, void **opaque, size_t *size);
 
 MTY_EXPORT void
 MTY_QueueFlush(MTY_Queue *ctx, void (*freeFunc)(void *value));
@@ -582,14 +657,14 @@ MTY_QueueFlush(MTY_Queue *ctx, void (*freeFunc)(void *value));
 MTY_EXPORT void
 MTY_QueueDestroy(MTY_Queue **queue);
 
-MTY_EXPORT void
-MTY_ListCreate(MTY_List **list);
+MTY_EXPORT MTY_List *
+MTY_ListCreate(void);
 
 MTY_EXPORT MTY_ListNode *
 MTY_ListFirst(MTY_List *ctx);
 
 MTY_EXPORT void
-MTY_ListAppend(MTY_List *ctx, void *value);
+MTY_ListAppend(MTY_List *ctx, const void *value);
 
 MTY_EXPORT void *
 MTY_ListRemove(MTY_List *ctx, MTY_ListNode *node);
@@ -623,17 +698,20 @@ typedef struct MTY_RWLock MTY_RWLock;
 typedef struct MTY_Sync MTY_Sync;
 typedef struct MTY_ThreadPool MTY_ThreadPool;
 
+MTY_EXPORT MTY_Thread *
+MTY_ThreadCreate(void *(*func)(void *opaque), const void *opaque);
+
 MTY_EXPORT void
-MTY_ThreadCreate(void *(*func)(void *opaque), const void *opaque, MTY_Thread **thread);
+MTY_ThreadDetach(void *(*func)(void *opaque), const void *opaque);
 
 MTY_EXPORT int64_t
-MTY_ThreadIDGet(MTY_Thread *ctx);
+MTY_ThreadGetID(MTY_Thread *ctx);
 
 MTY_EXPORT void *
 MTY_ThreadDestroy(MTY_Thread **thread);
 
-MTY_EXPORT void
-MTY_MutexCreate(MTY_Mutex **mutex);
+MTY_EXPORT MTY_Mutex *
+MTY_MutexCreate(void);
 
 MTY_EXPORT void
 MTY_MutexLock(MTY_Mutex *ctx);
@@ -647,8 +725,8 @@ MTY_MutexUnlock(MTY_Mutex *ctx);
 MTY_EXPORT void
 MTY_MutexDestroy(MTY_Mutex **mutex);
 
-MTY_EXPORT void
-MTY_CondCreate(MTY_Cond **cond);
+MTY_EXPORT MTY_Cond *
+MTY_CondCreate(void);
 
 MTY_EXPORT bool
 MTY_CondWait(MTY_Cond *ctx, MTY_Mutex *mutex, int32_t timeout);
@@ -659,8 +737,8 @@ MTY_CondWake(MTY_Cond *ctx);
 MTY_EXPORT void
 MTY_CondWakeAll(MTY_Cond *ctx);
 
-MTY_EXPORT void
-MTY_RWLockCreate(MTY_RWLock **rwlock);
+MTY_EXPORT MTY_RWLock *
+MTY_RWLockCreate(void);
 
 MTY_EXPORT void
 MTY_RWLockReader(MTY_RWLock *ctx);
@@ -677,8 +755,8 @@ MTY_RWLockDestroy(MTY_RWLock **rwlock);
 MTY_EXPORT void
 MTY_CondDestroy(MTY_Cond **cond);
 
-MTY_EXPORT void
-MTY_SyncCreate(MTY_Sync **sync);
+MTY_EXPORT MTY_Sync *
+MTY_SyncCreate(void);
 
 MTY_EXPORT bool
 MTY_SyncWait(MTY_Sync *ctx, int32_t timeout);
@@ -689,8 +767,8 @@ MTY_SyncWake(MTY_Sync *ctx);
 MTY_EXPORT void
 MTY_SyncDestroy(MTY_Sync **sync);
 
-MTY_EXPORT void
-MTY_ThreadPoolCreate(uint32_t maxThreads, MTY_ThreadPool **pool);
+MTY_EXPORT MTY_ThreadPool *
+MTY_ThreadPoolCreate(uint32_t maxThreads);
 
 MTY_EXPORT uint32_t
 MTY_ThreadPoolStart(MTY_ThreadPool *ctx, void (*func)(void *opaque), const void *opaque);
@@ -766,7 +844,7 @@ typedef enum {
 	MTY_WINDOW_MSG_MOUSE_MOTION = 5,
 	MTY_WINDOW_MSG_DROP         = 6,
 	MTY_WINDOW_MSG_MAKE_32      = 0x7FFFFFFF,
-} MTY_WindowMsgType;
+} MTY_MsgType;
 
 typedef enum {
 	MTY_SCANCODE_NONE      = 0x000,
@@ -823,7 +901,7 @@ typedef enum {
 } MTY_MouseButton;
 
 typedef struct {
-	MTY_WindowMsgType type;
+	MTY_MsgType type;
 
 	union {
 		struct {
@@ -853,22 +931,25 @@ typedef struct {
 			size_t size;
 		} drop;
 	};
-} MTY_WindowMsg;
+} MTY_Msg;
 
 typedef struct MTY_Window MTY_Window;
 
-typedef void (*MTY_WindowMsgFunc)(const MTY_WindowMsg *wmsg, void *opaque);
+typedef void (*MTY_MsgFunc)(const MTY_Msg *wmsg, void *opaque);
 typedef bool (*MTY_AppFunc)(void *opaque);
 
-MTY_EXPORT bool
-MTY_WindowCreate(const char *title, MTY_WindowMsgFunc msg_func, const void *opaque,
-	uint32_t width, uint32_t height, bool fullscreen, MTY_Window **window);
+MTY_EXPORT MTY_Window *
+MTY_WindowCreate(const char *title, MTY_MsgFunc msg_func, const void *opaque,
+	uint32_t width, uint32_t height, bool fullscreen);
 
 MTY_EXPORT void
 MTY_AppRun(MTY_AppFunc func, const void *opaque);
 
 MTY_EXPORT void
 MTY_WindowSetTitle(MTY_Window *ctx, const char *title, const char *subtitle);
+
+MTY_EXPORT bool
+MTY_WindowGetSize(MTY_Window *ctx, uint32_t *width, uint32_t *height);
 
 MTY_EXPORT void
 MTY_WindowPoll(MTY_Window *ctx);
@@ -886,10 +967,13 @@ MTY_EXPORT void
 MTY_WindowSetFullscreen(MTY_Window *ctx);
 
 MTY_EXPORT void
-MTY_WindowSetWindowed(MTY_Window *ctx, uint32_t width, uint32_t height);
+MTY_WindowSetSize(MTY_Window *ctx, uint32_t width, uint32_t height);
 
 MTY_EXPORT bool
 MTY_WindowIsFullscreen(MTY_Window *ctx);
+
+MTY_EXPORT void
+MTY_WindowSetRelativeMouse(MTY_Window *ctx, bool relative);
 
 MTY_EXPORT void
 MTY_WindowPresent(MTY_Window *ctx, uint32_t num_frames);

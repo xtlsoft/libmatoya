@@ -40,13 +40,13 @@ bool gfx_d3d9_create(IDirect3DDevice9 *device, struct gfx_d3d9 **gfx)
 
 	HRESULT e = IDirect3DDevice9_CreateVertexShader(device, (DWORD *) vs, &ctx->vs);
 	if (e != D3D_OK) {
-		MTY_Log("'IDirect3DDevice9_CreateVertexShader' failed with HRESULT %x", e);
+		MTY_Log("'IDirect3DDevice9_CreateVertexShader' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
 	e = IDirect3DDevice9_CreatePixelShader(device, (DWORD *) ps, &ctx->ps);
 	if (e != D3D_OK) {
-		MTY_Log("'IDirect3DDevice9_CreatePixelShader' failed with HRESULT %x", e);
+		MTY_Log("'IDirect3DDevice9_CreatePixelShader' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
@@ -64,14 +64,14 @@ bool gfx_d3d9_create(IDirect3DDevice9 *device, struct gfx_d3d9 **gfx)
 	e = IDirect3DDevice9_CreateVertexBuffer(device, sizeof(vertex_data), 0,
 		D3DUSAGE_DYNAMIC | D3DUSAGE_WRITEONLY, D3DPOOL_DEFAULT, &ctx->vb, NULL);
 	if (e != D3D_OK) {
-		MTY_Log("'IDirect3DDevice9_CreateVertexBuffer' failed with HRESULT %x", e);
+		MTY_Log("'IDirect3DDevice9_CreateVertexBuffer' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
 	void *ptr = NULL;
 	e = IDirect3DVertexBuffer9_Lock(ctx->vb, 0, 0, &ptr, D3DLOCK_DISCARD);
 	if (e != D3D_OK) {
-		MTY_Log("'IDirect3DVertexBuffer9_Lock' failed with HRESULT %x", e);
+		MTY_Log("'IDirect3DVertexBuffer9_Lock' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
@@ -79,7 +79,7 @@ bool gfx_d3d9_create(IDirect3DDevice9 *device, struct gfx_d3d9 **gfx)
 
 	e = IDirect3DVertexBuffer9_Unlock(ctx->vb);
 	if (e != D3D_OK) {
-		MTY_Log("'IDirect3DVertexBuffer9_Unlock' failed with HRESULT %x", e);
+		MTY_Log("'IDirect3DVertexBuffer9_Unlock' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
@@ -92,7 +92,7 @@ bool gfx_d3d9_create(IDirect3DDevice9 *device, struct gfx_d3d9 **gfx)
 
 	e = IDirect3DDevice9_CreateVertexDeclaration(device, dec, &ctx->vd);
 	if (e != D3D_OK) {
-		MTY_Log("'IDirect3DDevice9_CreateVertexDeclaration' failed with HRESULT %x", e);
+		MTY_Log("'IDirect3DDevice9_CreateVertexDeclaration' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
@@ -105,13 +105,13 @@ bool gfx_d3d9_create(IDirect3DDevice9 *device, struct gfx_d3d9 **gfx)
 	e = IDirect3DDevice9_CreateIndexBuffer(device, sizeof(index_data),
 		D3DUSAGE_DYNAMIC | D3DUSAGE_WRITEONLY, D3DFMT_INDEX32, D3DPOOL_DEFAULT, &ctx->ib, NULL);
 	if (e != D3D_OK) {
-		MTY_Log("'IDirect3DDevice9_CreateIndexBuffer' failed with HRESULT %x", e);
+		MTY_Log("'IDirect3DDevice9_CreateIndexBuffer' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
 	e = IDirect3DIndexBuffer9_Lock(ctx->ib, 0, 0, &ptr, D3DLOCK_DISCARD);
 	if (e != D3D_OK) {
-		MTY_Log("'IDirect3DIndexBuffer9_Lock' failed with HRESULT %x", e);
+		MTY_Log("'IDirect3DIndexBuffer9_Lock' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
@@ -119,7 +119,7 @@ bool gfx_d3d9_create(IDirect3DDevice9 *device, struct gfx_d3d9 **gfx)
 
 	e = IDirect3DIndexBuffer9_Unlock(ctx->ib);
 	if (e != D3D_OK) {
-		MTY_Log("'IDirect3DIndexBuffer9_Unlock' failed with HRESULT %x", e);
+		MTY_Log("'IDirect3DIndexBuffer9_Unlock' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
@@ -159,14 +159,14 @@ static HRESULT gfx_d3d9_refresh_resource(struct gfx_d3d9_res *res, IDirect3DDevi
 		e = IDirect3DDevice9_CreateTexture(device, width, height, 1, D3DUSAGE_DYNAMIC,
 			format, D3DPOOL_DEFAULT, &res->texture, NULL);
 		if (e != D3D_OK) {
-			MTY_Log("'IDirect3DDevice9_CreateTexture' failed with HRESULT %x", e);
+			MTY_Log("'IDirect3DDevice9_CreateTexture' failed with HRESULT 0x%X", e);
 			goto except;
 		}
 
 		e = IDirect3DTexture9_QueryInterface(res->texture, &IID_IDirect3DBaseTexture9,
 			(void **) &res->base);
 		if (e != D3D_OK) {
-			MTY_Log("'IDirect3DTexture9_QueryInterface' failed with HRESULT %x", e);
+			MTY_Log("'IDirect3DTexture9_QueryInterface' failed with HRESULT 0x%X", e);
 			goto except;
 		}
 
@@ -189,7 +189,7 @@ static HRESULT gfx_d3d9_crop_copy(IDirect3DDevice9 *device, IDirect3DTexture9 *t
 	D3DLOCKED_RECT rect;
 	HRESULT e = IDirect3DTexture9_LockRect(texture, 0, &rect, NULL, D3DLOCK_DISCARD);
 	if (e != D3D_OK) {
-		MTY_Log("'IDirect3DTexture9_LockRect' failed with HRESULT %x", e);
+		MTY_Log("'IDirect3DTexture9_LockRect' failed with HRESULT 0x%X", e);
 		return e;
 	}
 
@@ -198,7 +198,7 @@ static HRESULT gfx_d3d9_crop_copy(IDirect3DDevice9 *device, IDirect3DTexture9 *t
 
 	e = IDirect3DTexture9_UnlockRect(texture, 0);
 	if (e != D3D_OK) {
-		MTY_Log("'IDirect3DTexture9_UnlockRect' failed with HRESULT %x", e);
+		MTY_Log("'IDirect3DTexture9_UnlockRect' failed with HRESULT 0x%X", e);
 		return e;
 	}
 
@@ -295,7 +295,7 @@ bool gfx_d3d9_render(struct gfx_d3d9 *ctx, IDirect3DDevice9 *device,
 
 	e = IDirect3DDevice9_SetViewport(device, &vp);
 	if (e != D3D_OK) {
-		MTY_Log("'IDirect3DDevice9_SetViewport' failed with HRESULT %x", e);
+		MTY_Log("'IDirect3DDevice9_SetViewport' failed with HRESULT 0x%X", e);
 		return false;
 	}
 
@@ -305,19 +305,19 @@ bool gfx_d3d9_render(struct gfx_d3d9 *ctx, IDirect3DDevice9 *device,
 	if (dest) {
 		e = IDirect3DTexture9_GetSurfaceLevel(dest, 0, &surface);
 		if (e != D3D_OK) {
-			MTY_Log("'IDirect3DTexture9_GetSurfaceLevel' failed with HRESULT %x", e);
+			MTY_Log("'IDirect3DTexture9_GetSurfaceLevel' failed with HRESULT 0x%X", e);
 			goto except;
 		}
 
 		e = IDirect3DDevice9_SetRenderTarget(device, 0, surface);
 		if (e != D3D_OK) {
-			MTY_Log("'IDirect3DDevice9_SetRenderTarget' failed with HRESULT %x", e);
+			MTY_Log("'IDirect3DDevice9_SetRenderTarget' failed with HRESULT 0x%X", e);
 			goto except;
 		}
 
 		e = IDirect3DDevice9_Clear(device, 0, NULL, D3DCLEAR_TARGET, D3DCOLOR_XRGB(0, 0, 0), 1.0f, 0);
 		if (e != D3D_OK) {
-			MTY_Log("'IDirect3DDevice9_Clear' failed with HRESULT %x", e);
+			MTY_Log("'IDirect3DDevice9_Clear' failed with HRESULT 0x%X", e);
 			goto except;
 		}
 	}
@@ -325,25 +325,25 @@ bool gfx_d3d9_render(struct gfx_d3d9 *ctx, IDirect3DDevice9 *device,
 	// Vertex shader
 	e = IDirect3DDevice9_SetVertexShader(device, ctx->vs);
 	if (e != D3D_OK) {
-		MTY_Log("'IDirect3DDevice9_SetVertexShader' failed with HRESULT %x", e);
+		MTY_Log("'IDirect3DDevice9_SetVertexShader' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
 	e = IDirect3DDevice9_SetStreamSource(device, 0, ctx->vb, 0, 4 * sizeof(float));
 	if (e != D3D_OK) {
-		MTY_Log("'IDirect3DDevice9_SetStreamSource' failed with HRESULT %x", e);
+		MTY_Log("'IDirect3DDevice9_SetStreamSource' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
 	e = IDirect3DDevice9_SetVertexDeclaration(device, ctx->vd);
 	if (e != D3D_OK) {
-		MTY_Log("'IDirect3DDevice9_SetVertexDeclaration' failed with HRESULT %x", e);
+		MTY_Log("'IDirect3DDevice9_SetVertexDeclaration' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
 	e = IDirect3DDevice9_SetIndices(device, ctx->ib);
 	if (e != D3D_OK) {
-		MTY_Log("'IDirect3DDevice9_SetIndicies' failed with HRESULT %x", e);
+		MTY_Log("'IDirect3DDevice9_SetIndicies' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
@@ -354,14 +354,14 @@ bool gfx_d3d9_render(struct gfx_d3d9 *ctx, IDirect3DDevice9 *device,
 
 	e = IDirect3DDevice9_SetVertexShaderConstantF(device, 0, texel_offset, 1);
 	if (e != D3D_OK) {
-		MTY_Log("'IDirect3DDevice9_SetVertexShaderConstantF' failed with HRESULT %x", e);
+		MTY_Log("'IDirect3DDevice9_SetVertexShaderConstantF' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
 	// Pixel shader
 	e = IDirect3DDevice9_SetPixelShader(device, ctx->ps);
 	if (e != D3D_OK) {
-		MTY_Log("'IDirect3DDevice9_SetPixelShader' failed with HRESULT %x", e);
+		MTY_Log("'IDirect3DDevice9_SetPixelShader' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
@@ -371,13 +371,13 @@ bool gfx_d3d9_render(struct gfx_d3d9 *ctx, IDirect3DDevice9 *device,
 
 			e = IDirect3DDevice9_SetSamplerState(device, x, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
 			if (e != D3D_OK) {
-				MTY_Log("'IDirect3DDevice9_SetSamplerState' failed with HRESULT %x", e);
+				MTY_Log("'IDirect3DDevice9_SetSamplerState' failed with HRESULT 0x%X", e);
 				goto except;
 			}
 
 			e = IDirect3DDevice9_SetSamplerState(device, x, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
 			if (e != D3D_OK) {
-				MTY_Log("'IDirect3DDevice9_SetSamplerState' failed with HRESULT %x", e);
+				MTY_Log("'IDirect3DDevice9_SetSamplerState' failed with HRESULT 0x%X", e);
 				goto except;
 			}
 		}
@@ -387,14 +387,14 @@ bool gfx_d3d9_render(struct gfx_d3d9 *ctx, IDirect3DDevice9 *device,
 	format[0] = ctx->format;
 	e = IDirect3DDevice9_SetPixelShaderConstantF(device, 0, format, 1);
 	if (e != D3D_OK) {
-		MTY_Log("'IDirect3DDevice9_SetPixelShaderConstantF' failed with HRESULT %x", e);
+		MTY_Log("'IDirect3DDevice9_SetPixelShaderConstantF' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 
 	// Draw
 	e = IDirect3DDevice9_DrawIndexedPrimitive(device, D3DPT_TRIANGLELIST, 0, 0, 4, 0, 2);
 	if (e != D3D_OK) {
-		MTY_Log("'IDirect3DDevice9_DrawIndexedPrimitive' failed with HRESULT %x", e);
+		MTY_Log("'IDirect3DDevice9_DrawIndexedPrimitive' failed with HRESULT 0x%X", e);
 		goto except;
 	}
 

@@ -57,15 +57,15 @@ static void audio_queue_callback(void *opaque, AudioQueueRef q, AudioQueueBuffer
 	MTY_MutexUnlock(ctx->mutex);
 }
 
-bool MTY_AudioCreate(MTY_Audio **audio, uint32_t sample_rate)
+MTY_Audio *MTY_AudioCreate(uint32_t sampleRate)
 {
-	MTY_Audio *ctx = *audio = MTY_Alloc(1, sizeof(MTY_Audio));
-	ctx->sample_rate = sample_rate;
+	MTY_Audio *ctx = MTY_Alloc(1, sizeof(MTY_Audio));
+	ctx->sample_rate = sampleRate;
 
-	MTY_MutexCreate(&ctx->mutex);
+	ctx->mutex = MTY_MutexCreate();
 
 	AudioStreamBasicDescription format = {0};
-	format.mSampleRate = sample_rate;
+	format.mSampleRate = sampleRate;
 	format.mFormatID = kAudioFormatLinearPCM;
 	format.mFormatFlags = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
 	format.mFramesPerPacket = 1;
@@ -79,7 +79,7 @@ bool MTY_AudioCreate(MTY_Audio **audio, uint32_t sample_rate)
 	for (int32_t x = 0; x < AUDIO_BUFS; x++)
 		AudioQueueAllocateBuffer(ctx->q, AUDIO_BUF_SIZE, &ctx->audio_buf[x]);
 
-	return true;
+	return ctx;
 }
 
 uint32_t MTY_AudioGetQueuedFrames(MTY_Audio *ctx)

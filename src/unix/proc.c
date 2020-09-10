@@ -33,9 +33,9 @@ MTY_SO *MTY_SOLoad(const char *name)
 	return so;
 }
 
-void *MTY_SOSymbolGet(MTY_SO *ctx, const char *name)
+void *MTY_SOGetSymbol(MTY_SO *so, const char *name)
 {
-	void *sym = dlsym(ctx, name);
+	void *sym = dlsym(so, name);
 	if (!sym) {
 		const char *estr = dlerror();
 		if (estr)
@@ -66,7 +66,7 @@ void MTY_SOUnload(MTY_SO **so)
 	*so = NULL;
 }
 
-const char *MTY_ProcName(void)
+const char *MTY_ProcessName(void)
 {
 	mty_proc_name(PROC_NAME, MTY_PATH_MAX);
 

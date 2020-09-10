@@ -30,6 +30,7 @@ struct gfx_metal {
 	id<MTLBuffer> ib;
 	id<MTLRenderPipelineState> pipeline;
 	id<MTLSamplerState> ss;
+	id<MTLTexture> niltex;
 };
 
 bool gfx_metal_create(MTY_Device *mty_device, struct gfx_metal **gfx)
@@ -39,8 +40,10 @@ bool gfx_metal_create(MTY_Device *mty_device, struct gfx_metal **gfx)
 
 	id<MTLDevice> device = (__bridge id<MTLDevice>) mty_device;
 
+	MTLVertexDescriptor *vdesc = [MTLVertexDescriptor vertexDescriptor];
 	MTLRenderPipelineDescriptor *pdesc = [MTLRenderPipelineDescriptor new];
 	MTLSamplerDescriptor *sd = [MTLSamplerDescriptor new];
+	MTLTextureDescriptor *tdesc = [MTLTextureDescriptor new];
 
 	NSError *nse = nil;
 	ctx->library = [device newLibraryWithSource:[NSString stringWithUTF8String:MTL_LIBRARY] options:nil error:&nse];
@@ -64,20 +67,28 @@ bool gfx_metal_create(MTY_Device *mty_device, struct gfx_metal **gfx)
 		 1.0f,  0.0f	// TexCoord 3
 	};
 
-	ctx->vb = [device newBufferWithBytes:vdata length:sizeof(vdata) options:MTLResourceOptionCPUCacheModeDefault];
+	ctx->vb = [device newBufferWithBytes:vdata length:sizeof(vdata) options:MTLResourceCPUCacheModeWriteCombined];
 
 	uint16_t idata[] = {
 		0, 1, 2,
 		2, 3, 0
 	};
 
-	ctx->ib = [device newBufferWithBytes:idata length:sizeof(idata) options:MTLResourceOptionCPUCacheModeDefault];
+	ctx->ib = [device newBufferWithBytes:idata length:sizeof(idata) options:MTLResourceCPUCacheModeWriteCombined];
+
+	vdesc.attributes[0].offset = 0;
+	vdesc.attributes[0].format = MTLVertexFormatFloat2;
+	vdesc.attributes[1].offset = 2 * sizeof(float);
+	vdesc.attributes[1].format = MTLVertexFormatFloat2;
+	vdesc.layouts[0].stepRate = 1;
+	vdesc.layouts[0].stepFunction = MTLVertexStepFunctionPerVertex;
+	vdesc.layouts[0].stride = 4 * sizeof(float);
 
 	pdesc.sampleCount = 1;
 	pdesc.vertexFunction = ctx->vs;
 	pdesc.fragmentFunction = ctx->fs;
+	pdesc.vertexDescriptor = vdesc;
 	pdesc.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
-	pdesc.depthAttachmentPixelFormat = MTLPixelFormatInvalid;
 
 	ctx->pipeline = [device newRenderPipelineStateWithDescriptor:pdesc error:&nse];
 	if (nse) {
@@ -91,6 +102,12 @@ bool gfx_metal_create(MTY_Device *mty_device, struct gfx_metal **gfx)
 	sd.sAddressMode = MTLSamplerAddressModeClampToEdge;
 	sd.tAddressMode = MTLSamplerAddressModeClampToEdge;
 	ctx->ss = [device newSamplerStateWithDescriptor:sd];
+
+	tdesc.pixelFormat = MTLPixelFormatRGBA8Unorm;
+	tdesc.storageMode = MTLStorageModePrivate;
+	tdesc.width = 64;
+	tdesc.height = 64;
+	ctx->niltex = [device newTextureWithDescriptor:tdesc];
 
 	except:
 
@@ -108,6 +125,7 @@ static void gfx_metal_refresh_resource(struct gfx_metal_res *res, id<MTLDevice> 
 
 		MTLTextureDescriptor *tdesc = [MTLTextureDescriptor new];
 		tdesc.pixelFormat = format;
+		tdesc.cpuCacheMode = MTLCPUCacheModeWriteCombined;
 		tdesc.width = width;
 		tdesc.height = height;
 
@@ -129,7 +147,10 @@ static void gfx_metal_reload_textures(struct gfx_metal *ctx, id<MTLDevice> devic
 			[ctx->staging[0].texture replaceRegion:region mipmapLevel:0 withBytes:image bytesPerRow:4 * desc->imageWidth];
 			break;
 		}
-		case MTY_COLOR_FORMAT_NV12: {
+		case MTY_COLOR_FORMAT_NV12:
+		case MTY_COLOR_FORMAT_NV16: {
+			uint32_t div = desc->format == MTY_COLOR_FORMAT_NV12 ? 2 : 1;
+
 			// Y
 			gfx_metal_refresh_resource(&ctx->staging[0], device, MTLPixelFormatR8Unorm, desc->cropWidth, desc->cropHeight);
 
@@ -137,9 +158,9 @@ static void gfx_metal_reload_textures(struct gfx_metal *ctx, id<MTLDevice> devic
 			[ctx->staging[0].texture replaceRegion:region mipmapLevel:0 withBytes:image bytesPerRow:desc->imageWidth];
 
 			// UV
-			gfx_metal_refresh_resource(&ctx->staging[1], device, MTLPixelFormatRG8Unorm, desc->cropWidth / 2, desc->cropHeight / 2);
+			gfx_metal_refresh_resource(&ctx->staging[1], device, MTLPixelFormatRG8Unorm, desc->cropWidth / 2, desc->cropHeight / div);
 
-			region = MTLRegionMake2D(0, 0, desc->cropWidth / 2, desc->cropHeight / 2);
+			region = MTLRegionMake2D(0, 0, desc->cropWidth / 2, desc->cropHeight / div);
 			[ctx->staging[1].texture replaceRegion:region mipmapLevel:0 withBytes:(uint8_t *) image + desc->imageWidth * desc->imageHeight bytesPerRow:desc->imageWidth];
 			break;
 		}
@@ -189,7 +210,7 @@ bool gfx_metal_render(struct gfx_metal *ctx, MTY_Context *mty_context,
 	// Begin render pass
 	MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor new];
 	rpd.colorAttachments[0].texture = dest;
-	rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 1);
+	rpd.colorAttachments[0].clearColor = MTLClearColorMake(0.0, 0.0, 0.0, 1.0);
 	rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
 	rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
 
@@ -217,9 +238,10 @@ bool gfx_metal_render(struct gfx_metal *ctx, MTY_Context *mty_context,
 	// Fragment shader
 	[re setFragmentSamplerState:ctx->ss atIndex:0];
 
-	for (uint8_t x = 0; x < NUM_STAGING; x++)
-		if (ctx->staging[x].texture)
-			[re setFragmentTexture:ctx->staging[x].texture atIndex:x];
+	for (uint8_t x = 0; x < NUM_STAGING; x++) {
+		id<MTLTexture> tex = ctx->staging[x].texture ? ctx->staging[x].texture : ctx->niltex;
+		[re setFragmentTexture:tex atIndex:x];
+	}
 
 	[re setFragmentBytes:&ctx->format length:sizeof(MTY_ColorFormat) atIndex:0];
 
@@ -251,6 +273,7 @@ void gfx_metal_destroy(struct gfx_metal **gfx)
 	ctx->ib = nil;
 	ctx->pipeline = nil;
 	ctx->ss = nil;
+	ctx->niltex = nil;
 
 	MTY_Free(ctx);
 	*gfx = NULL;

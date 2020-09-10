@@ -16,7 +16,7 @@ enum {
 struct queue_slot {
 	void *data;
 	size_t size;
-	bool dynamic;
+	bool ptr;
 	MTY_Atomic32 state;
 };
 
@@ -32,22 +32,24 @@ struct MTY_Queue {
 	uint32_t pop_pos;
 };
 
-void MTY_QueueCreate(uint32_t len, size_t bufSize, MTY_Queue **queue)
+MTY_Queue *MTY_QueueCreate(uint32_t len, size_t bufSize)
 {
-	MTY_Queue *ctx = *queue = MTY_Alloc(1, sizeof(MTY_Queue));
+	MTY_Queue *ctx = MTY_Alloc(1, sizeof(MTY_Queue));
 	ctx->len = len;
 	ctx->buf_size = bufSize;
 
 	if (ctx->buf_size < sizeof(void *))
 		ctx->buf_size = sizeof(void *);
 
-	MTY_SyncCreate(&ctx->pop_sync);
-	MTY_MutexCreate(&ctx->push_mutex);
+	ctx->pop_sync = MTY_SyncCreate();
+	ctx->push_mutex = MTY_MutexCreate();
 
 	ctx->slots = MTY_Alloc(ctx->len, sizeof(struct queue_slot));
 
 	for (uint32_t x = 0; x < ctx->len; x++)
 		ctx->slots[x].data = MTY_Alloc(ctx->buf_size, 1);
+
+	return ctx;
 }
 
 uint32_t MTY_QueueLength(MTY_Queue *ctx)
@@ -60,20 +62,20 @@ uint32_t MTY_QueueLength(MTY_Queue *ctx)
 	return (uint32_t) pos;
 }
 
-bool MTY_QueuePushBegin(MTY_Queue *ctx, void **buffer)
+void *MTY_QueueAcquireBuffer(MTY_Queue *ctx)
 {
 	MTY_MutexLock(ctx->push_mutex);
 
 	int32_t state = MTY_Atomic32Get(&ctx->slots[ctx->push_pos].state);
 
 	if (state == QUEUE_EMPTY) {
-		*buffer = ctx->slots[ctx->push_pos].data;
-		return true;
+		return ctx->slots[ctx->push_pos].data;
 
 	} else {
 		MTY_MutexUnlock(ctx->push_mutex);
-		return false;
 	}
+
+	return NULL;
 }
 
 static uint32_t queue_next_pos(MTY_Queue *ctx, uint32_t pos)
@@ -84,7 +86,7 @@ static uint32_t queue_next_pos(MTY_Queue *ctx, uint32_t pos)
 	return pos;
 }
 
-static void queue_push_end(MTY_Queue *ctx, size_t size, bool dynamic)
+static void queue_push(MTY_Queue *ctx, size_t size, bool ptr)
 {
 	if (size > 0) {
 		uint32_t lock_pos = ctx->push_pos;
@@ -92,7 +94,7 @@ static void queue_push_end(MTY_Queue *ctx, size_t size, bool dynamic)
 
 		ctx->push_pos = queue_next_pos(ctx, ctx->push_pos);
 
-		ctx->slots[lock_pos].dynamic = dynamic;
+		ctx->slots[lock_pos].ptr = ptr;
 		MTY_Atomic32Set(&ctx->slots[lock_pos].state, QUEUE_FULL);
 
 		MTY_SyncWake(ctx->pop_sync);
@@ -101,12 +103,12 @@ static void queue_push_end(MTY_Queue *ctx, size_t size, bool dynamic)
 	MTY_MutexUnlock(ctx->push_mutex);
 }
 
-void MTY_QueuePushEnd(MTY_Queue *ctx, size_t size)
+void MTY_QueuePush(MTY_Queue *ctx, size_t size)
 {
-	queue_push_end(ctx, size, false);
+	queue_push(ctx, size, false);
 }
 
-static bool queue_pop_begin(MTY_Queue *ctx, int32_t timeout, bool last, void **buffer, size_t *size)
+static bool queue_pop(MTY_Queue *ctx, int32_t timeout, bool last, void **buffer, size_t *size)
 {
 	begin:
 
@@ -120,7 +122,7 @@ static bool queue_pop_begin(MTY_Queue *ctx, int32_t timeout, bool last, void **b
 			uint32_t next_pos = queue_next_pos(ctx, ctx->pop_pos);
 
 			if (MTY_Atomic32Get(&ctx->slots[next_pos].state) == QUEUE_FULL) {
-				MTY_QueuePopEnd(ctx);
+				MTY_QueueReleaseBuffer(ctx);
 				goto begin;
 			}
 		}
@@ -137,17 +139,17 @@ static bool queue_pop_begin(MTY_Queue *ctx, int32_t timeout, bool last, void **b
 	return false;
 }
 
-bool MTY_QueuePopBegin(MTY_Queue *ctx, int32_t timeout, void **buffer, size_t *size)
+bool MTY_QueuePop(MTY_Queue *ctx, int32_t timeout, void **buffer, size_t *size)
 {
-	return queue_pop_begin(ctx, timeout, false, buffer, size);
+	return queue_pop(ctx, timeout, false, buffer, size);
 }
 
-bool MTY_QueuePopLastBegin(MTY_Queue *ctx, int32_t timeout, void **buffer, size_t *size)
+bool MTY_QueuePopLast(MTY_Queue *ctx, int32_t timeout, void **buffer, size_t *size)
 {
-	return queue_pop_begin(ctx, timeout, true, buffer, size);
+	return queue_pop(ctx, timeout, true, buffer, size);
 }
 
-void MTY_QueuePopEnd(MTY_Queue *ctx)
+void MTY_QueueReleaseBuffer(MTY_Queue *ctx)
 {
 	uint32_t lock_pos = ctx->pop_pos;
 
@@ -156,13 +158,13 @@ void MTY_QueuePopEnd(MTY_Queue *ctx)
 	MTY_Atomic32Set(&ctx->slots[lock_pos].state, QUEUE_EMPTY);
 }
 
-bool MTY_QueuePush(MTY_Queue *ctx, const void *opaque, size_t size)
+bool MTY_QueuePushPtr(MTY_Queue *ctx, const void *opaque, size_t size)
 {
-	uint8_t *buffer = NULL;
+	uint8_t *buffer = MTY_QueueAcquireBuffer(ctx);
 
-	if (MTY_QueuePushBegin(ctx, (void **) &buffer)) {
+	if (buffer) {
 		memcpy(buffer, &opaque, sizeof(void *));
-		queue_push_end(ctx, size, true);
+		queue_push(ctx, size, true);
 
 		return true;
 	}
@@ -170,13 +172,13 @@ bool MTY_QueuePush(MTY_Queue *ctx, const void *opaque, size_t size)
 	return false;
 }
 
-bool MTY_QueuePop(MTY_Queue *ctx, int32_t timeout, void **opaque, size_t *size)
+bool MTY_QueuePopPtr(MTY_Queue *ctx, int32_t timeout, void **opaque, size_t *size)
 {
 	uint8_t *buffer = NULL;
 
-	if (queue_pop_begin(ctx, timeout, false, (void **) &buffer, size)) {
+	if (queue_pop(ctx, timeout, false, (void **) &buffer, size)) {
 		memcpy(opaque, buffer, sizeof(void *));
-		MTY_QueuePopEnd(ctx);
+		MTY_QueueReleaseBuffer(ctx);
 
 		return true;
 	}
@@ -186,16 +188,16 @@ bool MTY_QueuePop(MTY_Queue *ctx, int32_t timeout, void **opaque, size_t *size)
 
 void MTY_QueueFlush(MTY_Queue *ctx, void (*freeFunc)(void *value))
 {
-	for (void *data = NULL; queue_pop_begin(ctx, 0, false, (void **) &data, NULL);) {
+	for (void *data = NULL; queue_pop(ctx, 0, false, (void **) &data, NULL);) {
 		struct queue_slot *slot = &ctx->slots[ctx->pop_pos];
 
-		if (freeFunc && slot->dynamic) {
+		if (freeFunc && slot->ptr) {
 			void *ptr = NULL;
 			memcpy(&ptr, slot->data, sizeof(void *));
 			freeFunc(ptr);
 		}
 
-		MTY_QueuePopEnd(ctx);
+		MTY_QueueReleaseBuffer(ctx);
 	}
 }
 
@@ -208,6 +210,8 @@ void MTY_QueueDestroy(MTY_Queue **queue)
 
 	for (uint32_t x = 0; x < ctx->len; x++)
 		MTY_Free(ctx->slots[x].data);
+
+	MTY_Free(ctx->slots);
 
 	MTY_MutexDestroy(&ctx->push_mutex);
 	MTY_SyncDestroy(&ctx->pop_sync);

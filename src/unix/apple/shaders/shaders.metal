@@ -9,8 +9,8 @@
 using namespace metal;
 
 typedef struct {
-	packed_float2 position;
-	packed_float2 texcoord;
+	float2 position [[attribute(0)]];
+	float2 texcoord [[attribute(1)]];
 } Vertex;
 
 typedef struct {
@@ -18,12 +18,8 @@ typedef struct {
 	float2 texcoord;
 } VSOut;
 
-vertex VSOut vs(
-	const device Vertex *verticies [[buffer(0)]],
-	unsigned int vid [[vertex_id]]
-) {
-	const device Vertex &v = verticies[vid];
-
+vertex VSOut vs(Vertex v [[stage_in]])
+{
 	VSOut out;
 	out.position = float4(float2(v.position), 0.0, 1.0);
 	out.texcoord = v.texcoord;
@@ -31,7 +27,7 @@ vertex VSOut vs(
 	return out;
 }
 
-float4 yuv_to_rgba(float y, float u, float v)
+static float4 yuv_to_rgba(float y, float u, float v)
 {
 	y = (y - 0.0625) * 1.164;
 	u = u - 0.5;
@@ -52,8 +48,8 @@ fragment float4 fs(
 	constant uint &format [[buffer(0)]],
 	sampler s [[sampler(0)]]
 ) {
-	//NV12
-	if (format == 2) {
+	//NV12, NV16
+	if (format == 2 || format == 5) {
 		float y = tex0.sample(s, in.texcoord).r;
 		float u = tex1.sample(s, in.texcoord).r;
 		float v = tex1.sample(s, in.texcoord).g;

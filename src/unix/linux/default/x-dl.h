@@ -411,7 +411,7 @@ static bool x_dl_global_init(void)
 		}
 
 		#define LOAD_SYM(so, name) \
-			name = MTY_SOSymbolGet(so, #name); \
+			name = MTY_SOGetSymbol(so, #name); \
 			if (!name) {r = false; goto except;}
 
 		LOAD_SYM(X_DL_SO, XOpenDisplay);

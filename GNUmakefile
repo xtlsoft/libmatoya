@@ -1,6 +1,7 @@
 UNAME_S = $(shell uname -s)
 ARCH = $(shell uname -m)
 NAME = libmatoya
+PREFIX = mty
 
 .SUFFIXES: .vert .frag
 
@@ -33,7 +34,6 @@ OBJS := $(OBJS) \
 	src/unix/fs.o \
 	src/unix/memory.o \
 	src/unix/proc.o \
-	src/unix/request.o \
 	src/unix/thread.o \
 	src/unix/time.o
 
@@ -65,9 +65,6 @@ ifdef DEBUG
 FLAGS := $(FLAGS) -O0 -g
 else
 FLAGS := $(FLAGS) -O3 -fvisibility=hidden
-ifdef LTO
-FLAGS := $(FLAGS) -flto
-endif
 endif
 
 ############
@@ -80,6 +77,9 @@ CC = emcc
 AR = emar
 
 ARCH := emscripten
+
+OBJS := $(OBJS) \
+	src/unix/crypto.o
 
 else
 WASI_SDK = $(HOME)/wasi-sdk-11.0
@@ -98,7 +98,7 @@ DEFS := $(DEFS) \
 	-DMTY_GL_EXTERNAL \
 	-DMTY_GL_ES
 
-OS = web
+TARGET = web
 INCLUDES := $(INCLUDES) -Isrc/unix/web
 
 else
@@ -110,8 +110,8 @@ ifeq ($(UNAME_S), Linux)
 OBJS := $(OBJS) \
 	src/unix/crypto.o \
 	src/unix/aes-gcm-openssl.o \
-	src/unix/linux/audio.o \
-	src/unix/linux/window.o
+	src/unix/linux/default/audio.o \
+	src/unix/linux/default/window.o
 
 DEFS := $(DEFS) \
 	-DMTY_CRYPTO_EXTERNAL
@@ -122,8 +122,8 @@ TEST_LIBS = \
 	-ldl \
 	-lpthread
 
-OS = linux
-INCLUDES := $(INCLUDES) -Isrc/unix/linux
+TARGET = linux
+INCLUDES := $(INCLUDES) -Isrc/unix/linux -Isrc/unix/linux/default
 endif
 
 #############
@@ -145,16 +145,11 @@ ARCH = x86_64
 endif
 
 ifeq ($(TARGET), macosx)
-export MACOSX_DEPLOYMENT_TARGET=10.11
-OS = macos
-else ifeq ($(TARGET), iphoneos)
-OS = ios
-else ifeq ($(TARGET), iphonesimulator)
-OS = ios
-else ifeq ($(TARGET), appletvos)
-OS = tvos
-else ifeq ($(TARGET), appletvsimulator)
-OS = tvos
+MIN_VER = 10.11
+else
+MIN_VER = 11.0
+FLAGS := $(FLAGS) -fembed-bitcode
+DEFS := $(DEFS) -DMTY_GL_ES
 endif
 
 OBJS := $(OBJS) \
@@ -162,7 +157,7 @@ OBJS := $(OBJS) \
 	src/unix/apple/aes-gcm-cc.o \
 	src/unix/apple/audio.o \
 	src/unix/apple/crypto.o \
-	src/unix/apple/$(OS)/window.o
+	src/unix/apple/$(TARGET)/window.o
 
 SHADERS := $(SHADERS) \
 	src/unix/apple/shaders/shaders.h
@@ -179,10 +174,11 @@ TEST_LIBS = \
 	-framework AudioToolbox
 
 FLAGS := $(FLAGS) \
+	-m$(TARGET)-version-min=$(MIN_VER) \
 	-isysroot $(shell xcrun --sdk $(TARGET) --show-sdk-path) \
 	-arch $(ARCH)
 
-INCLUDES := $(INCLUDES) -Isrc/unix/apple -Isrc/unix/apple/$(OS)
+INCLUDES := $(INCLUDES) -Isrc/unix/apple -Isrc/unix/apple/$(TARGET)
 endif
 endif
 
@@ -193,15 +189,15 @@ all: clean-build clear $(SHADERS)
 	make objs -j4
 
 objs: $(OBJS)
-	mkdir -p bin/$(OS)/$(ARCH)
-	$(AR) -crs bin/$(OS)/$(ARCH)/$(NAME).a $(OBJS)
+	mkdir -p bin/$(TARGET)/$(ARCH)
+	$(AR) -crs bin/$(TARGET)/$(ARCH)/$(NAME).a $(OBJS)
 
 test: clean-build clear $(SHADERS)
 	make objs-test -j4
 
 objs-test: $(OBJS) src/test.o
-	$(CC) -o mty-test $(TEST_FLAGS) $(OBJS) src/test.o $(TEST_LIBS)
-	./mty-test
+	$(CC) -o $(PREFIX)-test $(TEST_FLAGS) $(OBJS) src/test.o $(TEST_LIBS)
+	./$(PREFIX)-test
 
 ###############
 ### ANDROID ###
@@ -216,19 +212,21 @@ android: clear $(SHADERS)
 	@$(ANDROID_NDK)/ndk-build -j4 \
 		NDK_PROJECT_PATH=. \
 		APP_BUILD_SCRIPT=Android.mk \
+		APP_OPTIM=release \
 		APP_PLATFORM=android-23 \
 		--no-print-directory \
 		| grep -v 'fcntl(): Operation not supported'
 
 clean: clean-build
-	@rm -rf bin
 	@rm -rf obj
 	@rm -f $(SHADERS)
-	@rm -f mty-test
 
 clean-build:
+	@rm -rf bin
+	@rm -f src/test.o
 	@rm -f $(OBJS)
 	@rm -f $(NAME).so
+	@rm -f $(PREFIX)-test
 
 clear:
 	@clear

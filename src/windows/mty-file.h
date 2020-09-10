@@ -23,7 +23,7 @@ static FILE *mty_fopen(const char *path, const char *mode)
 	MTY_Free(wmode);
 
 	if (e != 0) {
-		MTY_Log("'_wfopen_s' failed to open '%s' with errno %d", MTY_FsName(path, true), e);
+		MTY_Log("'_wfopen_s' failed to open '%s' with errno %d", MTY_GetFileName(path, true), e);
 		return NULL;
 	}
 
@@ -42,7 +42,7 @@ static size_t mty_file_size(const char *path)
 	if (e != 0) {
 		// Since these functions are lazily used to check the existence of files, don't log ENOENT
 		if (errno != ENOENT)
-			MTY_Log("'_wstat64' failed to query '%s' with errno %d", MTY_FsName(path, true), errno);
+			MTY_Log("'_wstat64' failed to query '%s' with errno %d", MTY_GetFileName(path, true), errno);
 
 		return 0;
 	}

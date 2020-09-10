@@ -17,12 +17,14 @@ struct MTY_Sync {
 	MTY_Cond *cond;
 };
 
-void MTY_SyncCreate(MTY_Sync **sync)
+MTY_Sync *MTY_SyncCreate(void)
 {
-	MTY_Sync *ctx = *sync = MTY_Alloc(1, sizeof(struct MTY_Sync));
+	MTY_Sync *ctx = MTY_Alloc(1, sizeof(struct MTY_Sync));
 
-	MTY_MutexCreate(&ctx->mutex);
-	MTY_CondCreate(&ctx->cond);
+	ctx->mutex = MTY_MutexCreate();
+	ctx->cond = MTY_CondCreate();
+
+	return ctx;
 }
 
 bool MTY_SyncWait(MTY_Sync *ctx, int32_t timeout)
@@ -83,15 +85,17 @@ struct MTY_ThreadPool {
 	struct thread_info *ti;
 };
 
-void MTY_ThreadPoolCreate(uint32_t maxThreads, MTY_ThreadPool **pool)
+MTY_ThreadPool *MTY_ThreadPoolCreate(uint32_t maxThreads)
 {
-	MTY_ThreadPool *ctx = *pool = MTY_Alloc(1, sizeof(MTY_ThreadPool));
+	MTY_ThreadPool *ctx = MTY_Alloc(1, sizeof(MTY_ThreadPool));
 
 	ctx->num = maxThreads + 1;
 	ctx->ti = MTY_Alloc(ctx->num, sizeof(struct thread_info));
 
 	for (uint32_t x = 0; x < ctx->num; x++)
-		MTY_MutexCreate(&ctx->ti[x].m);
+		ctx->ti[x].m = MTY_MutexCreate();
+
+	return ctx;
 }
 
 static void *thread_pool_func(void *opaque)
@@ -134,7 +138,7 @@ uint32_t MTY_ThreadPoolStart(MTY_ThreadPool *ctx, void (*func)(void *opaque), co
 			ti->opaque = (void *) opaque;
 			ti->detach = NULL;
 			ti->status = MTY_THREAD_STATE_RUNNING;
-			MTY_ThreadCreate(thread_pool_func, ti, &ti->t);
+			ti->t = MTY_ThreadCreate(thread_pool_func, ti);
 			index = x;
 		}
 
@@ -229,12 +233,14 @@ static uint8_t rwlock_index(void)
 	return 0;
 }
 
-void MTY_RWLockCreate(MTY_RWLock **rwlock)
+MTY_RWLock *MTY_RWLockCreate(void)
 {
-	MTY_RWLock *ctx = *rwlock = MTY_Alloc(1, sizeof(MTY_RWLock));
+	MTY_RWLock *ctx = MTY_Alloc(1, sizeof(MTY_RWLock));
 	ctx->index = rwlock_index();
 
 	mty_rwlock_create(&ctx->rwlock);
+
+	return ctx;
 }
 
 void MTY_RWLockReader(MTY_RWLock *ctx)

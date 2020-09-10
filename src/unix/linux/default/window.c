@@ -25,10 +25,12 @@
 struct MTY_Window {
 	Display *display;
 	Window xwindow;
-	MTY_WindowMsgFunc msg_func;
+	MTY_MsgFunc msg_func;
 	const void *opaque;
 	float dpi;
 
+	uint32_t width;
+	uint32_t height;
 	GLuint back_buffer;
 	GLXContext gl_ctx;
 	MTY_Renderer *renderer;
@@ -43,13 +45,13 @@ static void __attribute__((destructor)) window_global_destroy(void)
 	x_dl_global_destroy();
 }
 
-bool MTY_WindowCreate(const char *title, MTY_WindowMsgFunc msg_func, const void *opaque,
-	uint32_t width, uint32_t height, bool fullscreen, MTY_Window **window)
+MTY_Window *MTY_WindowCreate(const char *title, MTY_MsgFunc msg_func, const void *opaque,
+	uint32_t width, uint32_t height, bool fullscreen)
 {
 	if (!x_dl_global_init())
 		return false;
 
-	MTY_Window *ctx = *window = MTY_Alloc(1, sizeof(MTY_Window));
+	MTY_Window *ctx = MTY_Alloc(1, sizeof(MTY_Window));
 	ctx->opaque = opaque;
 	ctx->msg_func = msg_func;
 
@@ -96,14 +98,14 @@ bool MTY_WindowCreate(const char *title, MTY_WindowMsgFunc msg_func, const void 
 	ctx->gl_ctx = glXCreateContext(ctx->display, vis, NULL, GL_TRUE);
 	glXMakeCurrent(ctx->display, ctx->xwindow, ctx->gl_ctx);
 
-	MTY_RendererCreate(&ctx->renderer);
+	ctx->renderer = MTY_RendererCreate();
 
 	except:
 
 	if (!r)
-		MTY_WindowDestroy(window);
+		MTY_WindowDestroy(&ctx);
 
-	return r;
+	return ctx;
 }
 
 void MTY_AppRun(MTY_AppFunc func, const void *opaque)
@@ -121,6 +123,17 @@ void MTY_WindowSetTitle(MTY_Window *ctx, const char *title, const char *subtitle
 	}
 
 	XStoreName(ctx->display, ctx->xwindow, ctitle);
+}
+
+bool MTY_WindowGetSize(MTY_Window *ctx, uint32_t *width, uint32_t *height)
+{
+	XWindowAttributes attr = {0};
+	XGetWindowAttributes(ctx->display, ctx->xwindow, &attr);
+
+	*width = attr.width;
+	*height = attr.height;
+
+	return true;
 }
 
 static MTY_Scancode window_x_to_mty(KeySym sym)
@@ -174,7 +187,7 @@ static MTY_Scancode window_x_to_mty(KeySym sym)
 void MTY_WindowPoll(MTY_Window *ctx)
 {
 	while (XPending(ctx->display) > 0) {
-		MTY_WindowMsg wmsg = {0};
+		MTY_Msg wmsg = {0};
 
 		XEvent event = {0};
 		XNextEvent(ctx->display, &event);
@@ -253,7 +266,7 @@ void MTY_WindowSetFullscreen(MTY_Window *ctx)
 	XMapWindow(ctx->display, ctx->xwindow);
 }
 
-void MTY_WindowSetWindowed(MTY_Window *ctx, uint32_t width, uint32_t height)
+void MTY_WindowSetSize(MTY_Window *ctx, uint32_t width, uint32_t height)
 {
 }
 
@@ -285,10 +298,9 @@ MTY_Context *MTY_WindowGetContext(MTY_Window *ctx)
 MTY_Texture *MTY_WindowGetBackBuffer(MTY_Window *ctx)
 {
 	if (!ctx->back_buffer) {
-		XWindowAttributes attr = {0};
-		XGetWindowAttributes(ctx->display, ctx->xwindow, &attr);
+		MTY_WindowGetSize(ctx, &ctx->width, &ctx->height);
 
-		gfx_gl_rtv_refresh(&ctx->rtv, GL_RGBA8, GL_RGBA, attr.width, attr.height);
+		gfx_gl_rtv_refresh(&ctx->rtv, GL_RGBA8, GL_RGBA, ctx->width, ctx->height);
 		ctx->back_buffer = ctx->rtv.texture;
 	}
 
@@ -299,11 +311,9 @@ void MTY_WindowDrawQuad(MTY_Window *ctx, const void *image, const MTY_RenderDesc
 {
 	MTY_WindowGetBackBuffer(ctx);
 
-	XWindowAttributes attr = {0};
-	XGetWindowAttributes(ctx->display, ctx->xwindow, &attr);
 	MTY_RenderDesc mutated = *desc;
-	mutated.viewWidth = attr.width;
-	mutated.viewHeight = attr.height;
+	mutated.viewWidth = ctx->width;
+	mutated.viewHeight = ctx->height;
 
 	MTY_RendererDrawQuad(ctx->renderer, MTY_GFX_GL, NULL, NULL, image, &mutated,
 		(MTY_Texture *) (uintptr_t) ctx->back_buffer);

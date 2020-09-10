@@ -24,12 +24,12 @@ static void __attribute__((destructor)) audio_global_destroy(void)
 	asound_dl_global_destroy();
 }
 
-bool MTY_AudioCreate(MTY_Audio **audio, uint32_t sample_rate)
+MTY_Audio *MTY_AudioCreate(uint32_t sampleRate)
 {
 	if (!asound_dl_global_init())
 		return false;
 
-	MTY_Audio *ctx = *audio = MTY_Alloc(1, sizeof(MTY_Audio));
+	MTY_Audio *ctx = MTY_Alloc(1, sizeof(MTY_Audio));
 
 	bool r = true;
 
@@ -47,7 +47,7 @@ bool MTY_AudioCreate(MTY_Audio **audio, uint32_t sample_rate)
 	snd_pcm_hw_params_set_access(ctx->pcm, params, SND_PCM_ACCESS_RW_INTERLEAVED);
 	snd_pcm_hw_params_set_format(ctx->pcm, params, SND_PCM_FORMAT_S16);
 	snd_pcm_hw_params_set_channels(ctx->pcm, params, 2);
-	snd_pcm_hw_params_set_rate(ctx->pcm, params, sample_rate, 0);
+	snd_pcm_hw_params_set_rate(ctx->pcm, params, sampleRate, 0);
 	snd_pcm_hw_params(ctx->pcm, params);
 	snd_pcm_nonblock(ctx->pcm, 1);
 
@@ -56,9 +56,9 @@ bool MTY_AudioCreate(MTY_Audio **audio, uint32_t sample_rate)
 	except:
 
 	if (!r)
-		MTY_AudioDestroy(audio);
+		MTY_AudioDestroy(&ctx);
 
-	return r;
+	return ctx;
 }
 
 uint32_t MTY_AudioGetQueuedFrames(MTY_Audio *ctx)

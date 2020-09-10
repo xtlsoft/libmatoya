@@ -89,7 +89,7 @@ static bool crypto_dl_global_init(void)
 		}
 
 		#define LOAD_SYM(so, name) \
-			name = MTY_SOSymbolGet(so, #name); \
+			name = MTY_SOGetSymbol(so, #name); \
 			if (!name) {r = false; goto except;}
 
 		LOAD_SYM(CRYPTO_DL_SO, EVP_aes_128_gcm);

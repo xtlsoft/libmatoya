@@ -41,7 +41,7 @@ void MTY_Sleep(uint32_t timeout)
 
 	HANDLE timer = CreateWaitableTimer(NULL, TRUE, NULL);
 	if (!timer) {
-		MTY_Log("'CreateWaitableTimer' faled with error %x", GetLastError());
+		MTY_Log("'CreateWaitableTimer' faled with error 0x%X", GetLastError());
 		return;
 	}
 
@@ -54,11 +54,11 @@ void MTY_Sleep(uint32_t timeout)
 			MTY_Log("'WaitForSingleObject' returned %d", e);
 
 	} else {
-		MTY_Log("'SetWaitableTimer' failed with error %x", GetLastError());
+		MTY_Log("'SetWaitableTimer' failed with error 0x%X", GetLastError());
 	}
 
 	if (!CloseHandle(timer))
-		MTY_Log("'CloseHandle' failed with error %x", GetLastError());
+		MTY_Log("'CloseHandle' failed with error 0x%X", GetLastError());
 }
 
 void MTY_SetTimerResolution(uint32_t res)

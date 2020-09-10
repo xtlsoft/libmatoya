@@ -337,10 +337,11 @@ const GL_API = {
 let AC = {};
 
 const MTY_AUDIO_API = {
-	MTY_AudioCreate: function (_, sample_rate) {
-		AC.sample_rate = sample_rate;
+	MTY_AudioCreate: function (_, sampleRate) {
+		AC.sample_rate = sampleRate;
 		AC.playing = false;
-		setUint32(_, 1); // In case the app checks for NULL
+
+		return 1; // In case the app checks for NULL
 	},
 	MTY_AudioDestroy: function (_) {
 		setUint32(_, 0);

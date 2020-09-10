@@ -23,9 +23,11 @@ void web_attach_events(MTY_Window *w, void *malloc, void *free, void *mouse_moti
 
 struct MTY_Window {
 	MTY_Hash *h;
-	MTY_WindowMsgFunc msg_func;
+	MTY_MsgFunc msg_func;
 	const void *opaque;
 
+	uint32_t width;
+	uint32_t height;
 	GLint back_buffer;
 	MTY_Renderer *renderer;
 	struct gfx_gl_rtv rtv;
@@ -66,7 +68,7 @@ static void window_hash_codes(MTY_Hash *h)
 
 static void window_mouse_motion(MTY_Window *ctx, int32_t x, int32_t y)
 {
-	MTY_WindowMsg msg = {0};
+	MTY_Msg msg = {0};
 	msg.type = MTY_WINDOW_MSG_MOUSE_MOTION;
 	msg.mouseMotion.x = x;
 	msg.mouseMotion.y = y;
@@ -76,7 +78,7 @@ static void window_mouse_motion(MTY_Window *ctx, int32_t x, int32_t y)
 
 static void window_mouse_button(MTY_Window *ctx, bool pressed, int32_t button)
 {
-	MTY_WindowMsg msg = {0};
+	MTY_Msg msg = {0};
 	msg.type = MTY_WINDOW_MSG_MOUSE_BUTTON;
 	msg.mouseButton.pressed = pressed;
 	msg.mouseButton.button = button == 1 ? MTY_MOUSE_BUTTON_L :
@@ -87,7 +89,7 @@ static void window_mouse_button(MTY_Window *ctx, bool pressed, int32_t button)
 
 static void window_mouse_wheel(MTY_Window *ctx, int32_t x, int32_t y)
 {
-	MTY_WindowMsg msg = {0};
+	MTY_Msg msg = {0};
 	msg.type = MTY_WINDOW_MSG_MOUSE_WHEEL;
 	msg.mouseWheel.x = x;
 	msg.mouseWheel.y = y;
@@ -97,7 +99,7 @@ static void window_mouse_wheel(MTY_Window *ctx, int32_t x, int32_t y)
 
 static void window_keyboard(MTY_Window *ctx, bool pressed, const char *code)
 {
-	MTY_WindowMsg msg = {0};
+	MTY_Msg msg = {0};
 	msg.keyboard.scancode = (MTY_Scancode) MTY_HashGet(ctx->h, code);
 
 	if (msg.keyboard.scancode != 0) {
@@ -110,7 +112,7 @@ static void window_keyboard(MTY_Window *ctx, bool pressed, const char *code)
 
 static void window_drop(MTY_Window *ctx, const char *name, const void *data, size_t size)
 {
-	MTY_WindowMsg msg = {0};
+	MTY_Msg msg = {0};
 	msg.type = MTY_WINDOW_MSG_DROP;
 	msg.drop.name = name;
 	msg.drop.data = data;
@@ -119,14 +121,14 @@ static void window_drop(MTY_Window *ctx, const char *name, const void *data, siz
 	ctx->msg_func(&msg, (void *) ctx->opaque);
 }
 
-bool MTY_WindowCreate(const char *title, MTY_WindowMsgFunc msg_func, const void *opaque,
-	uint32_t width, uint32_t height, bool fullscreen, MTY_Window **window)
+MTY_Window *MTY_WindowCreate(const char *title, MTY_MsgFunc msg_func, const void *opaque,
+	uint32_t width, uint32_t height, bool fullscreen)
 {
-	MTY_Window *ctx = *window = MTY_Alloc(1, sizeof(MTY_Window));
+	MTY_Window *ctx = MTY_Alloc(1, sizeof(MTY_Window));
 	ctx->opaque = opaque;
 	ctx->msg_func = msg_func;
 
-	MTY_HashCreate(100, &ctx->h);
+	ctx->h = MTY_HashCreate(100);
 	window_hash_codes(ctx->h);
 
 	web_create_canvas();
@@ -134,9 +136,9 @@ bool MTY_WindowCreate(const char *title, MTY_WindowMsgFunc msg_func, const void 
 		window_mouse_button, window_mouse_wheel, window_keyboard, window_drop);
 
 	MTY_WindowSetTitle(ctx, title, NULL);
-	MTY_RendererCreate(&ctx->renderer);
+	ctx->renderer = MTY_RendererCreate();
 
-	return true;
+	return ctx;
 }
 
 void MTY_AppRun(MTY_AppFunc func, const void *opaque)
@@ -154,6 +156,13 @@ void MTY_WindowSetTitle(MTY_Window *ctx, const char *title, const char *subtitle
 	}
 
 	web_set_title(ctitle);
+}
+
+bool MTY_WindowGetSize(MTY_Window *ctx, uint32_t *width, uint32_t *height)
+{
+	web_get_size(width, height);
+
+	return true;
 }
 
 void MTY_WindowPoll(MTY_Window *ctx)
@@ -179,7 +188,7 @@ void MTY_WindowSetFullscreen(MTY_Window *ctx)
 {
 }
 
-void MTY_WindowSetWindowed(MTY_Window *ctx, uint32_t width, uint32_t height)
+void MTY_WindowSetSize(MTY_Window *ctx, uint32_t width, uint32_t height)
 {
 }
 
@@ -210,11 +219,9 @@ MTY_Context *MTY_WindowGetContext(MTY_Window *ctx)
 MTY_Texture *MTY_WindowGetBackBuffer(MTY_Window *ctx)
 {
 	if (!ctx->back_buffer) {
-		uint32_t width = 0;
-		uint32_t height = 0;
-		web_get_size(&width, &height);
+		MTY_WindowGetSize(ctx, &ctx->width, &ctx->height);
 
-		gfx_gl_rtv_refresh(&ctx->rtv, GL_RGBA8, GL_RGBA, width, height);
+		gfx_gl_rtv_refresh(&ctx->rtv, GL_RGBA8, GL_RGBA, ctx->width, ctx->height);
 		ctx->back_buffer = ctx->rtv.texture;
 	}
 
@@ -226,7 +233,8 @@ void MTY_WindowDrawQuad(MTY_Window *ctx, const void *image, const MTY_RenderDesc
 	MTY_WindowGetBackBuffer(ctx);
 
 	MTY_RenderDesc mutated = *desc;
-	web_get_size(&mutated.viewWidth, &mutated.viewHeight);
+	mutated.viewWidth = ctx->width;
+	mutated.viewHeight = ctx->height;
 
 	MTY_RendererDrawQuad(ctx->renderer, MTY_GFX_GL, NULL, NULL, image, &mutated,
 		(MTY_Texture *) (uintptr_t) ctx->back_buffer);

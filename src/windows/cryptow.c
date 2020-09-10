@@ -25,19 +25,19 @@ static void crypto_hash(const void *input, size_t inputSize, const void *key, si
 
 	NTSTATUS e = BCryptOpenAlgorithmProvider(&ahandle, alg_id, NULL, key ? BCRYPT_ALG_HANDLE_HMAC_FLAG : 0);
 	if (e != STATUS_SUCCESS) {
-		MTY_Log("'BCryptOpenAlgorithmProvider' failed with error %x", e);
+		MTY_Log("'BCryptOpenAlgorithmProvider' failed with error 0x%X", e);
 		goto except;
 	}
 
 	e = BCryptCreateHash(ahandle, &hhandle, NULL, 0, (UCHAR *) key, (ULONG) keySize, 0);
 	if (e != STATUS_SUCCESS) {
-		MTY_Log("'BCryptCreateHash' failed with error %x", e);
+		MTY_Log("'BCryptCreateHash' failed with error 0x%X", e);
 		goto except;
 	}
 
 	e = BCryptHashData(hhandle, (UCHAR *) input, (ULONG) inputSize, 0);
 	if (e != STATUS_SUCCESS) {
-		MTY_Log("'BCryptHashData' failed with error %x", e);
+		MTY_Log("'BCryptHashData' failed with error 0x%X", e);
 		goto except;
 	}
 
@@ -45,7 +45,7 @@ static void crypto_hash(const void *input, size_t inputSize, const void *key, si
 	ULONG written = 0;
 	e = BCryptGetProperty(hhandle, BCRYPT_HASH_LENGTH, (UCHAR *) &size, sizeof(DWORD), &written, 0);
 	if (e != STATUS_SUCCESS) {
-		MTY_Log("'BCryptGetProperty' failed with error %x", e);
+		MTY_Log("'BCryptGetProperty' failed with error 0x%X", e);
 		goto except;
 	}
 
@@ -56,7 +56,7 @@ static void crypto_hash(const void *input, size_t inputSize, const void *key, si
 
 	e = BCryptFinishHash(hhandle, output, size, 0);
 	if (e != STATUS_SUCCESS) {
-		MTY_Log("'BCryptFinishHash' failed with error %x", e);
+		MTY_Log("'BCryptFinishHash' failed with error 0x%X", e);
 		goto except;
 	}
 
@@ -77,18 +77,18 @@ void MTY_CryptoHash(MTY_Algorithm algo, const void *input, size_t inputSize, con
 			crypto_hash(input, inputSize, key, keySize, BCRYPT_SHA1_ALGORITHM, output, outputSize);
 			break;
 		case MTY_ALGORITHM_SHA1_HEX: {
-			uint8_t bytes[MTY_CRYPTO_SHA1_SIZE];
+			uint8_t bytes[MTY_SHA1_SIZE];
 			crypto_hash(input, inputSize, key, keySize, BCRYPT_SHA1_ALGORITHM, bytes, sizeof(bytes));
-			MTY_CryptoBytesToHex(bytes, sizeof(bytes), output, outputSize);
+			MTY_BytesToHex(bytes, sizeof(bytes), output, outputSize);
 			break;
 		}
 		case MTY_ALGORITHM_SHA256:
 			crypto_hash(input, inputSize, key, keySize, BCRYPT_SHA256_ALGORITHM, output, outputSize);
 			break;
 		case MTY_ALGORITHM_SHA256_HEX: {
-			uint8_t bytes[MTY_CRYPTO_SHA256_SIZE];
+			uint8_t bytes[MTY_SHA256_SIZE];
 			crypto_hash(input, inputSize, key, keySize, BCRYPT_SHA256_ALGORITHM, bytes, sizeof(bytes));
-			MTY_CryptoBytesToHex(bytes, sizeof(bytes), output, outputSize);
+			MTY_BytesToHex(bytes, sizeof(bytes), output, outputSize);
 			break;
 		}
 	}
@@ -97,10 +97,10 @@ void MTY_CryptoHash(MTY_Algorithm algo, const void *input, size_t inputSize, con
 
 // Random
 
-void MTY_CryptoRandom(void *output, size_t size)
+void MTY_RandomBytes(void *output, size_t size)
 {
 	NTSTATUS e = BCryptGenRandom(NULL, output, (ULONG) size, BCRYPT_USE_SYSTEM_PREFERRED_RNG);
 
 	if (e != STATUS_SUCCESS)
-		MTY_Log("'BCryptGenRandom' failed with error %x", e);
+		MTY_Log("'BCryptGenRandom' failed with error 0x%X", e);
 }

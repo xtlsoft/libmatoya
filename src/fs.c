@@ -11,7 +11,7 @@
 
 #include "mty-file.h"
 
-bool MTY_FsRead(const char *path, void **data, size_t *size)
+void *MTY_ReadFile(const char *path, size_t *size)
 {
 	size_t tmp = 0;
 	if (!size)
@@ -25,21 +25,21 @@ bool MTY_FsRead(const char *path, void **data, size_t *size)
 	if (!f)
 		return false;
 
-	*data = MTY_Alloc(*size + 1, 1);
+	void *data = MTY_Alloc(*size + 1, 1);
 
-	if (fread(*data, 1, *size, f) != *size) {
+	if (fread(data, 1, *size, f) != *size) {
 		MTY_Log("'fread' failed with ferror %d", ferror(f));
-		MTY_Free(*data);
-		*data = NULL;
+		MTY_Free(data);
+		data = NULL;
 		*size = 0;
 	}
 
 	fclose(f);
 
-	return *data ? true : false;
+	return data;
 }
 
-bool MTY_FsWrite(const char *path, const void *data, size_t size)
+bool MTY_WriteFile(const char *path, const void *data, size_t size)
 {
 	FILE *f = mty_fopen(path, "wb");
 	if (!f)
@@ -73,7 +73,7 @@ static bool fs_vfprintf(const char *path, const char *mode, const char *fmt, va_
 	return r;
 }
 
-bool MTY_FsWriteText(const char *path, const char *fmt, ...)
+bool MTY_WriteTextFile(const char *path, const char *fmt, ...)
 {
 	va_list args;
 	va_start(args, fmt);
@@ -85,7 +85,7 @@ bool MTY_FsWriteText(const char *path, const char *fmt, ...)
 	return r;
 }
 
-bool MTY_FsAppendText(const char *path, const char *fmt, ...)
+bool MTY_AppendTextToFile(const char *path, const char *fmt, ...)
 {
 	va_list args;
 	va_start(args, fmt);
@@ -97,7 +97,7 @@ bool MTY_FsAppendText(const char *path, const char *fmt, ...)
 	return r;
 }
 
-void MTY_FsFreeFileList(MTY_FileList **fl)
+void MTY_FreeFileList(MTY_FileList **fl)
 {
 	if (!fl || !*fl)
 		return;

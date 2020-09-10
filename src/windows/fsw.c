@@ -17,10 +17,11 @@
 static MTY_TLS char FS_CWD[MTY_PATH_MAX];
 static MTY_TLS char FS_HOME[MTY_PATH_MAX];
 static MTY_TLS char FS_PATH[MTY_PATH_MAX];
-static MTY_TLS char FS_PROGRAM_DIR[MTY_PATH_MAX];
+static MTY_TLS char FS_EXECUTABLE[MTY_PATH_MAX];
+static MTY_TLS char FS_PROGRAMS[MTY_PATH_MAX];
 static MTY_TLS char FS_FILE_NAME[MTY_PATH_MAX];
 
-bool MTY_FsDelete(const char *path)
+bool MTY_DeleteFile(const char *path)
 {
 	wchar_t *wpath = MTY_MultiToWideD(path);
 
@@ -28,16 +29,15 @@ bool MTY_FsDelete(const char *path)
 	MTY_Free(wpath);
 
 	if (!ok) {
-		MTY_Log("'DeleteFile' failed with error %x", GetLastError());
+		MTY_Log("'DeleteFile' failed with error 0x%X", GetLastError());
 		return false;
 	}
 
 	return true;
 }
 
-bool MTY_FsExists(const char *path)
+bool MTY_FileExists(const char *path)
 {
-	SetLastError(0);
 	wchar_t *wpath = MTY_MultiToWideD(path);
 
 	BOOL ok = PathFileExists(wpath);
@@ -46,13 +46,13 @@ bool MTY_FsExists(const char *path)
 	if (!ok) {
 		DWORD e = GetLastError();
 		if (e != ERROR_PATH_NOT_FOUND && e != ERROR_FILE_NOT_FOUND)
-			MTY_Log("'PathFileExists' failed with error %x", e);
+			MTY_Log("'PathFileExists' failed with error 0x%X", e);
 	}
 
 	return ok;
 }
 
-bool MTY_FsMkdir(const char *path)
+bool MTY_Mkdir(const char *path)
 {
 	wchar_t *wpath = MTY_MultiToWideD(path);
 
@@ -70,7 +70,7 @@ bool MTY_FsMkdir(const char *path)
 	return true;
 }
 
-const char *MTY_FsPath(const char *dir, const char *file)
+const char *MTY_Path(const char *dir, const char *file)
 {
 	char *safe_dir = MTY_Strdup(dir);
 	char *safe_file = MTY_Strdup(file);
@@ -83,14 +83,14 @@ const char *MTY_FsPath(const char *dir, const char *file)
 	return FS_PATH;
 }
 
-bool MTY_FsCopy(const char *src, const char *dst)
+bool MTY_CopyFile(const char *src, const char *dst)
 {
 	bool r = true;
 	wchar_t *srcw = MTY_MultiToWideD(src);
 	wchar_t *dstw = MTY_MultiToWideD(dst);
 
 	if (!CopyFile(srcw, dstw, FALSE)) {
-		MTY_Log("'CopyFile' failed with error %x", GetLastError());
+		MTY_Log("'CopyFile' failed with error 0x%X", GetLastError());
 		r = false;
 	}
 
@@ -100,7 +100,24 @@ bool MTY_FsCopy(const char *src, const char *dst)
 	return r;
 }
 
-const char *MTY_FsGetDir(MTY_FsDir dir)
+bool MTY_MoveFile(const char *src, const char *dst)
+{
+	bool r = true;
+	wchar_t *srcw = MTY_MultiToWideD(src);
+	wchar_t *dstw = MTY_MultiToWideD(dst);
+
+	if (!MoveFileEx(srcw, dstw, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+		MTY_Log("'MoveFileEx' failed with error 0x%X", GetLastError());
+		r = false;
+	}
+
+	MTY_Free(srcw);
+	MTY_Free(dstw);
+
+	return r;
+}
+
+const char *MTY_GetDir(MTY_Dir dir)
 {
 	wchar_t tmp[MTY_PATH_MAX];
 
@@ -114,7 +131,7 @@ const char *MTY_FsGetDir(MTY_FsDir dir)
 				return FS_CWD;
 
 			} else {
-				MTY_Log("'GetCurrentDirectory' failed with error %x", GetLastError());
+				MTY_Log("'GetCurrentDirectory' failed with error 0x%X", GetLastError());
 			}
 
 			break;
@@ -137,22 +154,38 @@ const char *MTY_FsGetDir(MTY_FsDir dir)
 
 			break;
 		}
-		case MTY_DIR_PROGRAM: {
-			memset(FS_PROGRAM_DIR, 0, MTY_PATH_MAX);
+		case MTY_DIR_EXECUTABLE: {
+			memset(FS_EXECUTABLE, 0, MTY_PATH_MAX);
 
 			DWORD n = GetModuleFileName(NULL, tmp, MTY_PATH_MAX);
 
 			if (n > 0) {
-				MTY_WideToMulti(tmp, FS_PROGRAM_DIR, MTY_PATH_MAX);
-				char *name = strrchr(FS_PROGRAM_DIR, '\\');
+				MTY_WideToMulti(tmp, FS_EXECUTABLE, MTY_PATH_MAX);
+				char *name = strrchr(FS_EXECUTABLE, '\\');
 
 				if (name)
 					name[0] = '\0';
 
-				return FS_PROGRAM_DIR;
+				return FS_EXECUTABLE;
 
 			} else {
-				MTY_Log("'GetModuleFileName' failed with error %x", GetLastError());
+				MTY_Log("'GetModuleFileName' failed with error 0x%X", GetLastError());
+			}
+
+			break;
+		}
+		case MTY_DIR_PROGRAMS: {
+			wchar_t *dirw = NULL;
+
+			HRESULT e = SHGetKnownFolderPath(&FOLDERID_ProgramFiles, 0, NULL, &dirw);
+			if (e == S_OK) {
+				MTY_WideToMulti(dirw, FS_PROGRAMS, MTY_PATH_MAX);
+				CoTaskMemFree(dirw);
+
+				return FS_PROGRAMS;
+
+			} else {
+				MTY_Log("'SHGetKnownFolderPath' failed with HRESULT 0x%X", e);
 			}
 
 			break;
@@ -162,22 +195,31 @@ const char *MTY_FsGetDir(MTY_FsDir dir)
 	return ".";
 }
 
-bool MTY_FsLockCreate(const char *path, MTY_LockFile **lock)
+MTY_LockFile *MTY_LockFileCreate(const char *path, MTY_FileMode mode)
 {
-	wchar_t *pathw = MTY_MultiToWideD(path);
-	*lock = (MTY_LockFile *) CreateFile(pathw, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
-		FILE_ATTRIBUTE_NORMAL, NULL);
-	MTY_Free(pathw);
+	DWORD share = FILE_SHARE_READ;
+	DWORD access = GENERIC_READ;
+	DWORD create = OPEN_EXISTING;
 
-	if (*lock == (MTY_LockFile *) INVALID_HANDLE_VALUE) {
-		MTY_Log("'CreateFile' failed with error %x", GetLastError());
-		return false;
+	if (mode == MTY_FILE_MODE_WRITE) {
+		share = 0;
+		access = GENERIC_WRITE;
+		create = CREATE_ALWAYS;
 	}
 
-	return true;
+	wchar_t *pathw = MTY_MultiToWideD(path);
+	HANDLE lock = CreateFile(pathw, access, share, NULL, create, FILE_ATTRIBUTE_NORMAL, NULL);
+	MTY_Free(pathw);
+
+	if (lock == INVALID_HANDLE_VALUE) {
+		MTY_Log("'CreateFile' failed with error 0x%X", GetLastError());
+		return NULL;
+	}
+
+	return (MTY_LockFile *) lock;
 }
 
-void MTY_FsLockDestroy(MTY_LockFile **lock)
+void MTY_LockFileDestroy(MTY_LockFile **lock)
 {
 	if (!lock || !*lock)
 		return;
@@ -185,12 +227,12 @@ void MTY_FsLockDestroy(MTY_LockFile **lock)
 	MTY_LockFile *ctx = *lock;
 
 	if (!CloseHandle((HANDLE) ctx))
-		MTY_Log("'CloseHandle' failed with error %x", GetLastError());
+		MTY_Log("'CloseHandle' failed with error 0x%X", GetLastError());
 
 	*lock = NULL;
 }
 
-const char *MTY_FsName(const char *path, bool extension)
+const char *MTY_GetFileName(const char *path, bool extension)
 {
 	const char *name = strrchr(path, '\\');
 	name = name ? name + 1 : path;
@@ -234,13 +276,13 @@ static int32_t fs_file_compare(const void *p1, const void *p2)
 	}
 }
 
-MTY_FileList *MTY_FsFileList(const char *path, const char *filter)
+MTY_FileList *MTY_GetFileList(const char *path, const char *filter)
 {
 	MTY_FileList *fl = MTY_Alloc(1, sizeof(MTY_FileList));
 	char *pathd = MTY_Strdup(path);
 
 	WIN32_FIND_DATA ent;
-	wchar_t *pathw = MTY_MultiToWideD(MTY_FsPath(pathd, "*"));
+	wchar_t *pathw = MTY_MultiToWideD(MTY_Path(pathd, "*"));
 
 	HANDLE dir = FindFirstFile(pathw, &ent);
 	bool ok = dir != INVALID_HANDLE_VALUE;
@@ -257,7 +299,7 @@ MTY_FileList *MTY_FsFileList(const char *path, const char *filter)
 
 			char *name = MTY_WideToMultiD(namew);
 			fl->files[fl->len].name = name;
-			fl->files[fl->len].path = MTY_Strdup(MTY_FsPath(pathd, name));
+			fl->files[fl->len].path = MTY_Strdup(MTY_Path(pathd, name));
 			fl->files[fl->len].dir = is_dir;
 			fl->len++;
 		}

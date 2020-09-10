@@ -27,11 +27,9 @@
 	#pragma warning(pop)
 #endif
 
-bool MTY_JSONParse(const char *input, MTY_JSON **output)
+MTY_JSON *MTY_JSONParse(const char *input)
 {
-	*output = (MTY_JSON *) cJSON_Parse(input);
-
-	return *output;
+	return (MTY_JSON *) cJSON_Parse(input);
 }
 
 char *MTY_JSONStringify(const MTY_JSON *json)
@@ -44,24 +42,24 @@ char *MTY_JSONStringify(const MTY_JSON *json)
 	return cJSON_PrintUnformatted(cj);
 }
 
-bool MTY_JSONReadFile(const char *path, MTY_JSON **output)
+MTY_JSON *MTY_JSONReadFile(const char *path)
 {
-	void *jstr = NULL;
-	bool r = MTY_FsRead(path, &jstr, NULL);
+	MTY_JSON *j = NULL;
+	void *jstr = MTY_ReadFile(path, NULL);
 
-	if (r)
-		r = MTY_JSONParse(jstr, output);
+	if (jstr)
+		j = MTY_JSONParse(jstr);
 
 	MTY_Free(jstr);
 
-	return r;
+	return j;
 }
 
 bool MTY_JSONWriteFile(const char *path, const MTY_JSON *json)
 {
 	char *jstr = MTY_JSONStringify(json);
 
-	bool r = MTY_FsWrite(path, jstr, strlen(jstr));
+	bool r = MTY_WriteFile(path, jstr, strlen(jstr));
 	MTY_Free(jstr);
 
 	return r;
@@ -201,7 +199,21 @@ bool MTY_JSONObjKeyExists(const MTY_JSON *json, const char *key)
 	return cJSON_GetObjectItemCaseSensitive((cJSON *) json, key) ? true : false;
 }
 
-void MTY_JSONObjKeyDelete(MTY_JSON *json, const char *key)
+const char *MTY_JSONObjGetKey(const MTY_JSON *json, uint32_t index)
+{
+	cJSON *cj = (cJSON *) json;
+
+	if (!cj || !cJSON_IsObject(cj))
+		return NULL;
+
+	cJSON *item = cJSON_GetArrayItem(cj, index);
+	if (!item)
+		return NULL;
+
+	return item->string;
+}
+
+void MTY_JSONObjDeleteKey(MTY_JSON *json, const char *key)
 {
 	if (!json)
 		return;
@@ -242,7 +254,7 @@ bool MTY_JSONArrayIndexExists(const MTY_JSON *json, uint32_t index)
 	return cJSON_GetArrayItem((cJSON *) json, index) ? true : false;
 }
 
-void MTY_JSONArrayIndexDelete(MTY_JSON *json, uint32_t index)
+void MTY_JSONArrayDeleteIndex(MTY_JSON *json, uint32_t index)
 {
 	if (!json)
 		return;

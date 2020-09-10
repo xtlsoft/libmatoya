@@ -27,11 +27,9 @@ struct MTY_Renderer {
 	struct gfx_metal *metal;
 };
 
-bool MTY_RendererCreate(MTY_Renderer **renderer)
+MTY_Renderer *MTY_RendererCreate(void)
 {
-	*renderer = MTY_Alloc(1, sizeof(MTY_Renderer));
-
-	return true;
+	return MTY_Alloc(1, sizeof(MTY_Renderer));
 }
 
 static void render_destroy_api(MTY_Renderer *ctx)

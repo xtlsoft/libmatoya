@@ -8,7 +8,11 @@
 
 #include "matoya.h"
 
-#include "GL/glcorearb30.h"
+#if defined(MTY_GL_INCLUDE)
+	#include MTY_GL_INCLUDE
+#else
+	#include "GL/glcorearb30.h"
+#endif
 
 struct gfx_gl_rtv {
 	GLenum format;

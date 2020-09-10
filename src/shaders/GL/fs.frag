@@ -37,8 +37,8 @@ void main(void)
 		vs_texcoord[1]
 	);
 
-	// NV12
-	if (format == 2) {
+	// NV12, NV16
+	if (format == 2 || format == 5) {
 		float y = texture2D(tex0, proj).r;
 		float u = texture2D(tex1, proj).r;
 		float v = texture2D(tex1, proj).g;

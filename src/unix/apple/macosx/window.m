@@ -35,8 +35,10 @@
 
 struct MTY_Window {
 	MTYWindow *nswindow;
-	MTY_WindowMsgFunc msg_func;
+	MTY_MsgFunc msg_func;
 	const void *opaque;
+
+	bool relative;
 
 	CAMetalLayer *layer;
 	CVDisplayLinkRef display_link;
@@ -57,11 +59,11 @@ static CVReturn window_display_link(CVDisplayLinkRef displayLink, const CVTimeSt
 	return 0;
 }
 
-bool MTY_WindowCreate(const char *title, MTY_WindowMsgFunc msg_func, const void *opaque,
-	uint32_t width, uint32_t height, bool fullscreen, MTY_Window **window)
+MTY_Window *MTY_WindowCreate(const char *title, MTY_MsgFunc msg_func, const void *opaque,
+	uint32_t width, uint32_t height, bool fullscreen)
 {
 	bool r = true;
-	MTY_Window *ctx = *window = MTY_Alloc(1, sizeof(MTY_Window));
+	MTY_Window *ctx = MTY_Alloc(1, sizeof(MTY_Window));
 	ctx->msg_func = msg_func;
 	ctx->opaque = opaque;
 
@@ -96,14 +98,14 @@ bool MTY_WindowCreate(const char *title, MTY_WindowMsgFunc msg_func, const void 
 	CVDisplayLinkSetOutputCallback(ctx->display_link, window_display_link, ctx);
 	CVDisplayLinkStart(ctx->display_link);
 
-	MTY_RendererCreate(&ctx->renderer);
+	ctx->renderer = MTY_RendererCreate();
 
 	except:
 
 	if (!r)
-		MTY_WindowDestroy(window);
+		MTY_WindowDestroy(&ctx);
 
-	return r;
+	return ctx;
 }
 
 void MTY_AppRun(MTY_AppFunc func, const void *opaque)
@@ -122,6 +124,17 @@ void MTY_WindowSetTitle(MTY_Window *ctx, const char *title, const char *subtitle
 
 	NSString *nss = [NSString stringWithUTF8String:ctitle];
 	ctx->nswindow.title = nss;
+}
+
+bool MTY_WindowGetSize(MTY_Window *ctx, uint32_t *width, uint32_t *height)
+{
+	CGSize size = ctx->nswindow.contentView.frame.size;
+	CGFloat scale = ctx->nswindow.screen.backingScaleFactor;
+
+	*width = lrint(size.width * scale);
+	*height = lrint(size.height * scale);
+
+	return true;
 }
 
 static MTY_Scancode window_keycode_to_wmsg(unsigned short kc)
@@ -255,7 +268,7 @@ static MTY_Scancode window_keycode_to_wmsg(unsigned short kc)
 void MTY_WindowPoll(MTY_Window *ctx)
 {
 	CGSize size = ctx->nswindow.contentView.frame.size;
-	uint32_t scale = lrint([ctx->nswindow screen].backingScaleFactor);
+	uint32_t scale = lrint(ctx->nswindow.screen.backingScaleFactor);
 
 	while (true) {
 		NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:nil inMode:NSDefaultRunLoopMode dequeue:YES];
@@ -263,7 +276,7 @@ void MTY_WindowPoll(MTY_Window *ctx)
 			break;
 
 		bool block_app = false;
-		MTY_WindowMsg wmsg = {0};
+		MTY_Msg wmsg = {0};
 
 		switch (event.type) {
 			case NSEventTypeKeyUp:
@@ -320,14 +333,22 @@ void MTY_WindowPoll(MTY_Window *ctx)
 			case NSEventTypeRightMouseDragged:
 			case NSEventTypeOtherMouseDragged:
 			case NSEventTypeMouseMoved: {
-				NSPoint p = [ctx->nswindow mouseLocationOutsideOfEventStream];
-				int32_t x = lrint(p.x);
-				int32_t y = lrint(size.height - p.y);
-
-				if (x >= 0 && y >= 0 && x <= size.width && y <= size.height) {
+				if (ctx->relative) {
 					wmsg.type = MTY_WINDOW_MSG_MOUSE_MOTION;
-					wmsg.mouseMotion.x = x * scale;
-					wmsg.mouseMotion.y = y * scale;
+					wmsg.mouseMotion.relative = true;
+					wmsg.mouseMotion.x = event.deltaX;
+					wmsg.mouseMotion.y = event.deltaY;
+
+				} else {
+					NSPoint p = [ctx->nswindow mouseLocationOutsideOfEventStream];
+					int32_t x = lrint(p.x);
+					int32_t y = lrint(size.height - p.y);
+
+					if (x >= 0 && y >= 0 && x <= size.width && y <= size.height) {
+						wmsg.type = MTY_WINDOW_MSG_MOUSE_MOTION;
+						wmsg.mouseMotion.x = x * scale;
+						wmsg.mouseMotion.y = y * scale;
+					}
 				}
 				break;
 			}
@@ -355,9 +376,23 @@ bool MTY_WindowIsForeground(MTY_Window *ctx)
 	return ctx->nswindow.isKeyWindow;
 }
 
+void MTY_WindowSetRelativeMouse(MTY_Window *ctx, bool relative)
+{
+	if (relative && !ctx->relative) {
+		ctx->relative = true;
+		CGAssociateMouseAndMouseCursorPosition(NO);
+		CGDisplayHideCursor(kCGDirectMainDisplay);
+
+	} else if (!relative && ctx->relative) {
+		ctx->relative = false;
+		CGAssociateMouseAndMouseCursorPosition(YES);
+		CGDisplayShowCursor(kCGDirectMainDisplay);
+	}
+}
+
 uint32_t MTY_WindowGetRefreshRate(MTY_Window *ctx)
 {
-	NSNumber *n = [ctx->nswindow screen].deviceDescription[@"NSScreenNumber"];
+	NSNumber *n = ctx->nswindow.screen.deviceDescription[@"NSScreenNumber"];
 	CGDirectDisplayID display_id = [n intValue];
 
 	CGDisplayModeRef mode = CGDisplayCopyDisplayMode(display_id);
@@ -383,10 +418,8 @@ void MTY_WindowSetFullscreen(MTY_Window *ctx)
 		[ctx->nswindow toggleFullScreen:ctx->nswindow];
 }
 
-void MTY_WindowSetWindowed(MTY_Window *ctx, uint32_t width, uint32_t height)
+void MTY_WindowSetSize(MTY_Window *ctx, uint32_t width, uint32_t height)
 {
-	if (MTY_WindowIsFullscreen(ctx))
-		[ctx->nswindow toggleFullScreen:ctx->nswindow];
 }
 
 bool MTY_WindowIsFullscreen(MTY_Window *ctx)

@@ -15,19 +15,19 @@ struct MTY_AESGCM {
 	CCCryptorRef enc;
 };
 
-bool MTY_AESGCMCreate(const void *key, size_t keySize, MTY_AESGCM **aesgcm)
+MTY_AESGCM *MTY_AESGCMCreate(const void *key)
 {
-	MTY_AESGCM *ctx = *aesgcm = MTY_Alloc(1, sizeof(MTY_AESGCM));
+	MTY_AESGCM *ctx = MTY_Alloc(1, sizeof(MTY_AESGCM));
 
 	CCCryptorStatus e = CCCryptorCreateWithMode(kCCEncrypt, kCCModeGCM, kCCAlgorithmAES128,
-		0, NULL, key, keySize, NULL, 0, 0, 0, &ctx->enc);
+		0, NULL, key, 16, NULL, 0, 0, 0, &ctx->enc);
 	if (e != kCCSuccess) {
 		MTY_Log("'CCCryptoCreateWithMode' failed with error %d", e);
 		goto except;
 	}
 
 	e = CCCryptorCreateWithMode(kCCDecrypt, kCCModeGCM, kCCAlgorithmAES128,
-		0, NULL, key, keySize, NULL, 0, 0, 0, &ctx->dec);
+		0, NULL, key, 16, NULL, 0, 0, 0, &ctx->dec);
 	if (e != kCCSuccess) {
 		MTY_Log("'CCCryptoCreateWithMode' failed with error %d", e);
 		goto except;
@@ -36,13 +36,13 @@ bool MTY_AESGCMCreate(const void *key, size_t keySize, MTY_AESGCM **aesgcm)
 	except:
 
 	if (e != kCCSuccess)
-		MTY_AESGCMDestroy(aesgcm);
+		MTY_AESGCMDestroy(&ctx);
 
-	return e == kCCSuccess;
+	return ctx;
 }
 
-bool MTY_AESGCMEncrypt(MTY_AESGCM *ctx, const void *plainText, size_t textSize, const void *nonce,
-	size_t nonceSize, void *hash, size_t hashSize, void *cipherText)
+bool MTY_AESGCMEncrypt(MTY_AESGCM *ctx, const void *nonce, const void *plainText, size_t size,
+	void *hash, void *cipherText)
 {
 	CCCryptorStatus e = CCCryptorGCMReset(ctx->enc);
 	if (e != kCCSuccess) {
@@ -50,19 +50,20 @@ bool MTY_AESGCMEncrypt(MTY_AESGCM *ctx, const void *plainText, size_t textSize, 
 		return false;
 	}
 
-	e = CCCryptorGCMAddIV(ctx->enc, nonce, nonceSize);
+	e = CCCryptorGCMAddIV(ctx->enc, nonce, 12);
 	if (e != kCCSuccess) {
 		MTY_Log("'CCCryptorGCMAddIV' failed with error %d", e);
 		return false;
 	}
 
-	e = CCCryptorGCMEncrypt(ctx->enc, plainText, textSize, cipherText);
+	e = CCCryptorGCMEncrypt(ctx->enc, plainText, size, cipherText);
 	if (e != kCCSuccess) {
 		MTY_Log("'CCCryptorGCMEncrypt' failed with error %d", e);
 		return false;
 	}
 
-	e = CCCryptorGCMFinal(ctx->enc, hash, &hashSize);
+	size_t hash_size = 16;
+	e = CCCryptorGCMFinal(ctx->enc, hash, &hash_size);
 	if (e != kCCSuccess) {
 		MTY_Log("'CCCryptorGCMFinal' failed with error %d", e);
 		return false;
@@ -71,8 +72,8 @@ bool MTY_AESGCMEncrypt(MTY_AESGCM *ctx, const void *plainText, size_t textSize, 
 	return true;
 }
 
-bool MTY_AESGCMDecrypt(MTY_AESGCM *ctx, const void *cipherText, size_t textSize, const void *nonce,
-	size_t nonceSize, const void *hash, size_t hashSize, void *plainText)
+bool MTY_AESGCMDecrypt(MTY_AESGCM *ctx, const void *nonce, const void *cipherText, size_t size,
+	const void *hash, void *plainText)
 {
 	CCCryptorStatus e = CCCryptorGCMReset(ctx->dec);
 	if (e != kCCSuccess) {
@@ -80,13 +81,13 @@ bool MTY_AESGCMDecrypt(MTY_AESGCM *ctx, const void *cipherText, size_t textSize,
 		return false;
 	}
 
-	e = CCCryptorGCMAddIV(ctx->dec, nonce, nonceSize);
+	e = CCCryptorGCMAddIV(ctx->dec, nonce, 12);
 	if (e != kCCSuccess) {
 		MTY_Log("'CCCryptorGCMAddIV' failed with error %d", e);
 		return false;
 	}
 
-	e = CCCryptorGCMDecrypt(ctx->dec, cipherText, textSize, plainText);
+	e = CCCryptorGCMDecrypt(ctx->dec, cipherText, size, plainText);
 	if (e != kCCSuccess) {
 		MTY_Log("'CCCryptorGCMDecrypt' failed with error %d", e);
 		return false;
@@ -100,7 +101,7 @@ bool MTY_AESGCMDecrypt(MTY_AESGCM *ctx, const void *cipherText, size_t textSize,
 		return false;
 	}
 
-	if (memcmp(hash, hashf, MTY_MIN(hashf_size, hashSize))) {
+	if (memcmp(hash, hashf, MTY_MIN(hashf_size, 16))) {
 		MTY_Log("Authentication hash mismatch");
 		return false;
 	}

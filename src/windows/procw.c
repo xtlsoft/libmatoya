@@ -23,16 +23,16 @@ MTY_SO *MTY_SOLoad(const char *name)
 	MTY_Free(wname);
 
 	if (!so)
-		MTY_Log("'LoadLibrary' failed to find '%s' with error %x", name, GetLastError());
+		MTY_Log("'LoadLibrary' failed to find '%s' with error 0x%X", name, GetLastError());
 
 	return so;
 }
 
-void *MTY_SOSymbolGet(MTY_SO *ctx, const char *name)
+void *MTY_SOGetSymbol(MTY_SO *so, const char *name)
 {
-	void *sym = (void *) GetProcAddress((HMODULE) ctx, name);
+	void *sym = (void *) GetProcAddress((HMODULE) so, name);
 	if (!sym)
-		MTY_Log("'GetProcAddress' failed to find '%s' with error %x", name, GetLastError());
+		MTY_Log("'GetProcAddress' failed to find '%s' with error 0x%X", name, GetLastError());
 
 	return sym;
 }
@@ -43,12 +43,12 @@ void MTY_SOUnload(MTY_SO **so)
 		return;
 
 	if (!FreeLibrary((HMODULE) *so))
-		MTY_Log("'FreeLibrary' failed with error %x", GetLastError());
+		MTY_Log("'FreeLibrary' failed with error 0x%X", GetLastError());
 
 	*so = NULL;
 }
 
-const char *MTY_ProcName(void)
+const char *MTY_ProcessName(void)
 {
 	wchar_t tmp[MTY_PATH_MAX];
 	memset(PROC_NAME, 0, MTY_PATH_MAX);
@@ -58,7 +58,7 @@ const char *MTY_ProcName(void)
 		MTY_WideToMulti(tmp, PROC_NAME, MTY_PATH_MAX);
 
 	} else {
-		MTY_Log("'GetModuleFileName' failed with error %x", GetLastError());
+		MTY_Log("'GetModuleFileName' failed with error 0x%X", GetLastError());
 	}
 
 	return PROC_NAME;
@@ -75,7 +75,7 @@ const char *MTY_Hostname(void)
 		MTY_WideToMulti(hostnamew, PROC_HOSTNAME, MTY_PATH_MAX);
 
 	} else {
-		MTY_Log("'GetComputerName' failed with error %x", GetLastError());
+		MTY_Log("'GetComputerName' failed with error 0x%X", GetLastError());
 		snprintf(PROC_HOSTNAME, MTY_PATH_MAX, "noname");
 	}
 
