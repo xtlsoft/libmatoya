@@ -38,7 +38,7 @@ make TARGET=appletvsimulator
 ```
 #### Web
 ```shell
-# By default, WASM=1 builds a WASI compatible binary. It will build an Esmcripten
+# By default, WASM=1 builds a WASI compatible binary. It will build an Emscripten
 # compatible binary if the Emscripten environment is present
 
 # Must be built on a Unix environment
